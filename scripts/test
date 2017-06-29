@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+set -eu
+
+PKGS=$(go list ./... | grep -v /vendor)
+FORMATTABLE="$(ls -d */ | grep -v vendor/)"
+
+LINT_EXCLUDE='(/vendor|pb$)'
+LINTABLE=$(go list ./... | grep -v -E $LINT_EXCLUDE)
+
+# go test $PKGS -cover
+
+# Test
+workdir=.cover
+profile="$workdir/cover.out"
+mode=count
+
+generate_cover_data() {
+    rm -rf "$workdir"
+    mkdir "$workdir"
+
+    for pkg in "$@"; do
+        f="$workdir/$(echo $pkg | tr / -).cover"
+        go test -covermode="$mode" -coverprofile="$f" "$pkg"
+    done
+
+    echo "mode: $mode" >"$profile"
+    grep -h -v "^mode:" "$workdir"/*.cover >>"$profile"
+}
+
+show_cover_report() {
+    go tool cover -${1}="$profile"
+}
+
+generate_cover_data $PKGS
+show_cover_report func
+go vet $PKGS
+
+
+echo "Checking gofmt..."
+fmtRes=$(gofmt -l $FORMATTABLE)
+if [ -n "${fmtRes}" ]; then
+  echo -e "gofmt checking failed:\n${fmtRes}"
+  exit 2
+fi
+
+echo "Checking golint..."
+lintRes=$(echo $LINTABLE | xargs -n 1 golint)
+if [ -n "${lintRes}" ]; then
+  echo -e "golint checking failed:\n${lintRes}"
+  exit 2
+fi
