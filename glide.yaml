@@ -1,0 +1,28 @@
+package: gitlab.thetechnick.ninja/thetechnick/nginx-ingress
+import:
+- package: github.com/golang/glog
+- package: k8s.io/apimachinery
+  subpackages:
+  - pkg/apis/meta/v1
+  - pkg/fields
+  - pkg/labels
+  - pkg/runtime
+  - pkg/util/intstr
+  - pkg/util/wait
+- package: k8s.io/client-go
+  version: ^3.0.0-beta.0
+  subpackages:
+  - kubernetes
+  - pkg/api
+  - pkg/api/v1
+  - pkg/apis/extensions/v1beta1
+  - rest
+  - tools/cache
+  - tools/clientcmd
+  - tools/clientcmd/api
+  - util/workqueue
+testImport:
+- package: github.com/stretchr/testify
+  version: ^1.1.4
+  subpackages:
+  - assert

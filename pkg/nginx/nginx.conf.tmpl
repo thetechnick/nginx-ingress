@@ -8,10 +8,13 @@ pid        /var/run/nginx.pid;
 
 events {
     worker_connections  1024;
+    multi_accept on;
+    use epoll;
 }
 
 
 http {
+    server_tokens off;
     include       /etc/nginx/mime.types;
     default_type  application/octet-stream;
 
@@ -34,7 +37,7 @@ http {
 
     keepalive_timeout  65;
 
-    #gzip  on;
+    gzip  on;
 
     server_names_hash_max_size {{.ServerNamesHashMaxSize}};
     {{if .ServerNamesHashBucketSize}}server_names_hash_bucket_size {{.ServerNamesHashBucketSize}};{{end}}

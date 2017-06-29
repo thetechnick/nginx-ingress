@@ -22,10 +22,10 @@ type NginxController struct {
 }
 
 // IngressNginxConfig describes an NGINX configuration
-type IngressNginxConfig struct {
-	Upstreams []Upstream
-	Servers   []Server
-}
+// type IngressNginxConfig struct {
+// 	Upstreams []Upstream
+// 	Servers   []Server
+// }
 
 // Upstream describes an NGINX upstream
 type Upstream struct {
@@ -45,6 +45,7 @@ type Server struct {
 	Name                  string
 	ServerTokens          bool
 	Locations             []Location
+	Upstreams             []Upstream
 	SSL                   bool
 	SSLCertificate        string
 	SSLCertificateKey     string
@@ -138,7 +139,7 @@ func (nginx *NginxController) DeleteIngress(name string) {
 
 // AddOrUpdateIngress creates or updates a file with
 // the specified configuration for the specified ingress
-func (nginx *NginxController) AddOrUpdateIngress(name string, config IngressNginxConfig) {
+func (nginx *NginxController) AddOrUpdateConfig(name string, config Server) {
 	glog.V(3).Infof("Updating NGINX configuration")
 	filename := nginx.getIngressNginxConfigFileName(name)
 	nginx.templateIt(config, filename)
@@ -194,10 +195,13 @@ func (nginx *NginxController) AddOrUpdateCertAndKey(name string, cert string, ke
 }
 
 func (nginx *NginxController) getIngressNginxConfigFileName(name string) string {
+	if name == emptyHost {
+		name = "default"
+	}
 	return path.Join(nginx.nginxConfdPath, name+".conf")
 }
 
-func (nginx *NginxController) templateIt(config IngressNginxConfig, filename string) {
+func (nginx *NginxController) templateIt(config Server, filename string) {
 	tmpl, err := template.New("ingress.tmpl").ParseFiles("ingress.tmpl")
 	if err != nil {
 		glog.Fatal("Failed to parse template file")
