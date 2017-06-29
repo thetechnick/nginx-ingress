@@ -137,7 +137,7 @@ func (nginx *NginxController) DeleteIngress(name string) {
 	}
 }
 
-// AddOrUpdateIngress creates or updates a file with
+// AddOrUpdateConfig creates or updates a file with
 // the specified configuration for the specified ingress
 func (nginx *NginxController) AddOrUpdateConfig(name string, config Server) {
 	glog.V(3).Infof("Updating NGINX configuration")

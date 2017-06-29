@@ -24,3 +24,4 @@ Session.vim
 # go
 .cover
 vendor
+bin

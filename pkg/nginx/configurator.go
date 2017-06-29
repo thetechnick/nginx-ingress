@@ -31,6 +31,7 @@ func NewConfigurator(nginx *NginxController, collisionHandler CollisionHandler, 
 	return &cnf
 }
 
+// AddOrUpdateDHParam adds/updates the dhparam file
 func (cnf *Configurator) AddOrUpdateDHParam(content string) (string, error) {
 	return cnf.nginx.AddOrUpdateDHParam(content)
 }
@@ -341,17 +342,17 @@ func parseRewrites(service string) (serviceName string, rewrite string, err erro
 	parts := strings.SplitN(service, " ", 2)
 
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("Invalid rewrite format: %s\n", service)
+		return "", "", fmt.Errorf("invalid rewrite format: %s", service)
 	}
 
 	svcNameParts := strings.Split(parts[0], "=")
 	if len(svcNameParts) != 2 {
-		return "", "", fmt.Errorf("Invalid rewrite format: %s\n", svcNameParts)
+		return "", "", fmt.Errorf("invalid rewrite format: %s", svcNameParts)
 	}
 
 	rwPathParts := strings.Split(parts[1], "=")
 	if len(rwPathParts) != 2 {
-		return "", "", fmt.Errorf("Invalid rewrite format: %s\n", rwPathParts)
+		return "", "", fmt.Errorf("invalid rewrite format: %s", rwPathParts)
 	}
 
 	return svcNameParts[1], rwPathParts[1], nil
