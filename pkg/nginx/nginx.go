@@ -1,311 +1,50 @@
 package nginx
 
 import (
-	"bytes"
-	"fmt"
-	"os"
-	"os/exec"
-	"path"
-	"text/template"
+	log "github.com/sirupsen/logrus"
 
-	"github.com/golang/glog"
+	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/shell"
 )
 
-const dhparamFilename = "dhparam.pem"
-
-// Controller Updates NGINX configuration, starts and reloads NGINX
-type Controller struct {
-	nginxConfdPath string
-	nginxCertsPath string
-	local          bool
-	healthStatus   bool
+// Nginx controls the nginx process
+type Nginx interface {
+	Start() error
+	Stop() error
+	Reload() error
+	TestConfig() error
 }
 
-// Upstream describes an NGINX upstream
-type Upstream struct {
-	Name            string
-	UpstreamServers []UpstreamServer
+// NewNginx creates a new nginx instance
+func NewNginx(e shell.Executor) Nginx {
+	return &nginx{e}
 }
 
-// UpstreamServer describes a server in an NGINX upstream
-type UpstreamServer struct {
-	Address string
-	Port    string
+type nginx struct {
+	executor shell.Executor
 }
 
-// Server describes an NGINX server
-type Server struct {
-	ServerSnippets        []string
-	Name                  string
-	ServerTokens          bool
-	Locations             []Location
-	Upstreams             []Upstream
-	SSL                   bool
-	SSLCertificate        string
-	SSLCertificateKey     string
-	HTTP2                 bool
-	RedirectToHTTPS       bool
-	ProxyProtocol         bool
-	HSTS                  bool
-	HSTSMaxAge            int64
-	HSTSIncludeSubdomains bool
-	ProxyHideHeaders      []string
-	ProxyPassHeaders      []string
-
-	// http://nginx.org/en/docs/http/ngx_http_realip_module.html
-	RealIPHeader    string
-	SetRealIPFrom   []string
-	RealIPRecursive bool
+func (n *nginx) Start() error {
+	log.Debug("starting nginx")
+	return n.executor.Exec("nginx")
 }
 
-// Location describes an NGINX location
-type Location struct {
-	LocationSnippets     []string
-	Path                 string
-	Upstream             Upstream
-	ProxyConnectTimeout  string
-	ProxyReadTimeout     string
-	ClientMaxBodySize    string
-	Websocket            bool
-	Rewrite              string
-	SSL                  bool
-	ProxyBuffering       bool
-	ProxyBuffers         string
-	ProxyBufferSize      string
-	ProxyMaxTempFileSize string
+func (n *nginx) Stop() error {
+	log.Debug("stopping nginx")
+	return n.executor.Exec("nginx -s quit")
 }
 
-// MainConfig describe the main NGINX configuration file
-type MainConfig struct {
-	ServerNamesHashBucketSize string
-	ServerNamesHashMaxSize    string
-	LogFormat                 string
-	HealthStatus              bool
-	HTTPSnippets              []string
-	// http://nginx.org/en/docs/http/ngx_http_ssl_module.html
-	SSLProtocols           string
-	SSLPreferServerCiphers bool
-	SSLCiphers             string
-	SSLDHParam             string
-}
-
-// NewUpstreamWithDefaultServer creates an upstream with the default server.
-// proxy_pass to an upstream with the default server returns 502.
-// We use it for services that have no endpoints
-func NewUpstreamWithDefaultServer(name string) Upstream {
-	return Upstream{
-		Name:            name,
-		UpstreamServers: []UpstreamServer{UpstreamServer{Address: "127.0.0.1", Port: "8181"}},
+func (n *nginx) Reload() error {
+	log.Debug("reloading nginx")
+	if err := n.TestConfig(); err != nil {
+		return err
 	}
-}
-
-// NewController creates a NGINX controller
-func NewController(nginxConfPath string, local bool, healthStatus bool) (*Controller, error) {
-	ngxc := Controller{
-		nginxConfdPath: path.Join(nginxConfPath, "conf.d"),
-		nginxCertsPath: path.Join(nginxConfPath, "ssl"),
-		local:          local,
-		healthStatus:   healthStatus,
-	}
-
-	if !local {
-		createDir(ngxc.nginxCertsPath)
-	}
-
-	cfg := &MainConfig{ServerNamesHashMaxSize: NewDefaultConfig().MainServerNamesHashMaxSize}
-	ngxc.UpdateMainConfigFile(cfg)
-
-	return &ngxc, nil
-}
-
-// DeleteIngress deletes the configuration file, which corresponds for the
-// specified ingress from NGINX conf directory
-func (nginx *Controller) DeleteIngress(name string) {
-	filename := nginx.getIngressNginxConfigFileName(name)
-	glog.V(3).Infof("deleting %v", filename)
-
-	if !nginx.local {
-		if err := os.Remove(filename); err != nil {
-			glog.Warningf("Failed to delete %v: %v", filename, err)
-		}
-	}
-}
-
-// AddOrUpdateConfig creates or updates a file with
-// the specified configuration for the specified ingress
-func (nginx *Controller) AddOrUpdateConfig(name string, config Server) {
-	glog.V(3).Infof("Updating NGINX configuration")
-	filename := nginx.getIngressNginxConfigFileName(name)
-	nginx.templateIt(config, filename)
-}
-
-// AddOrUpdateDHParam creates the servers dhparam.pem file
-func (nginx *Controller) AddOrUpdateDHParam(dhparam string) (string, error) {
-	fileName := nginx.nginxCertsPath + "/" + dhparamFilename
-	if !nginx.local {
-		pem, err := os.Create(fileName)
-		if err != nil {
-			return fileName, fmt.Errorf("Couldn't create file %v: %v", fileName, err)
-		}
-		defer pem.Close()
-
-		_, err = pem.WriteString(dhparam)
-		if err != nil {
-			return fileName, fmt.Errorf("Couldn't write to pem file %v: %v", fileName, err)
-		}
-	}
-	return fileName, nil
-}
-
-// AddOrUpdateCertAndKey creates a .pem file wth the cert and the key with the
-// specified name
-func (nginx *Controller) AddOrUpdateCertAndKey(name string, cert string, key string) string {
-	pemFileName := nginx.nginxCertsPath + "/" + name + ".pem"
-
-	if !nginx.local {
-		pem, err := os.Create(pemFileName)
-		if err != nil {
-			glog.Fatalf("Couldn't create pem file %v: %v", pemFileName, err)
-		}
-		defer pem.Close()
-
-		_, err = pem.WriteString(key)
-		if err != nil {
-			glog.Fatalf("Couldn't write to pem file %v: %v", pemFileName, err)
-		}
-
-		_, err = pem.WriteString("\n")
-		if err != nil {
-			glog.Fatalf("Couldn't write to pem file %v: %v", pemFileName, err)
-		}
-
-		_, err = pem.WriteString(cert)
-		if err != nil {
-			glog.Fatalf("Couldn't write to pem file %v: %v", pemFileName, err)
-		}
-	}
-
-	return pemFileName
-}
-
-func (nginx *Controller) getIngressNginxConfigFileName(name string) string {
-	if name == emptyHost {
-		name = "default"
-	}
-	return path.Join(nginx.nginxConfdPath, name+".conf")
-}
-
-func (nginx *Controller) templateIt(config Server, filename string) {
-	tmpl, err := template.New("ingress.tmpl").ParseFiles("ingress.tmpl")
-	if err != nil {
-		glog.Fatal("Failed to parse template file")
-	}
-
-	glog.V(3).Infof("Writing NGINX conf to %v", filename)
-
-	if glog.V(3) {
-		tmpl.Execute(os.Stdout, config)
-	}
-
-	if !nginx.local {
-		w, err := os.Create(filename)
-		if err != nil {
-			glog.Fatalf("Failed to open %v: %v", filename, err)
-		}
-		defer w.Close()
-
-		if err := tmpl.Execute(w, config); err != nil {
-			glog.Fatalf("Failed to write template %v", err)
-		}
-	} else {
-		// print conf to stdout here
-	}
-
-	glog.V(3).Infof("NGINX configuration file had been updated")
-}
-
-// Reload reloads NGINX
-func (nginx *Controller) Reload() error {
-	if !nginx.local {
-		if err := shellOut("nginx -t"); err != nil {
-			return fmt.Errorf("Invalid nginx configuration detected, not reloading: %s", err)
-		}
-		if err := shellOut("nginx -s reload"); err != nil {
-			return fmt.Errorf("Reloading NGINX failed: %s", err)
-		}
-	} else {
-		glog.V(3).Info("Reloading nginx")
+	if err := n.executor.Exec("nginx -s reload"); err != nil {
+		return err
 	}
 	return nil
 }
 
-// Start starts NGINX
-func (nginx *Controller) Start() {
-	if !nginx.local {
-		if err := shellOut("nginx"); err != nil {
-			glog.Fatalf("Failed to start nginx: %v", err)
-		}
-	} else {
-		glog.V(3).Info("Starting nginx")
-	}
-}
-
-func createDir(path string) {
-	if err := os.Mkdir(path, os.ModeDir); err != nil {
-		glog.Fatalf("Couldn't create directory %v: %v", path, err)
-	}
-}
-
-func shellOut(cmd string) (err error) {
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-
-	glog.V(3).Infof("executing %s", cmd)
-
-	command := exec.Command("sh", "-c", cmd)
-	command.Stdout = &stdout
-	command.Stderr = &stderr
-
-	err = command.Start()
-	if err != nil {
-		return fmt.Errorf("Failed to execute %v, err: %v", cmd, err)
-	}
-
-	err = command.Wait()
-	if err != nil {
-		return fmt.Errorf("Command %v stdout: %q\nstderr: %q\nfinished with error: %v", cmd,
-			stdout.String(), stderr.String(), err)
-	}
-	return nil
-}
-
-// UpdateMainConfigFile update the main NGINX configuration file
-func (nginx *Controller) UpdateMainConfigFile(cfg *MainConfig) {
-	cfg.HealthStatus = nginx.healthStatus
-
-	tmpl, err := template.New("nginx.conf.tmpl").ParseFiles("nginx.conf.tmpl")
-	if err != nil {
-		glog.Fatalf("Failed to parse the main config template file: %v", err)
-	}
-
-	filename := "/etc/nginx/nginx.conf"
-	glog.V(3).Infof("Writing NGINX conf to %v", filename)
-
-	if glog.V(3) {
-		tmpl.Execute(os.Stdout, cfg)
-	}
-
-	if !nginx.local {
-		w, err := os.Create(filename)
-		if err != nil {
-			glog.Fatalf("Failed to open %v: %v", filename, err)
-		}
-		defer w.Close()
-
-		if err := tmpl.Execute(w, cfg); err != nil {
-			glog.Fatalf("Failed to write template %v", err)
-		}
-	}
-
-	glog.V(3).Infof("The main NGINX configuration file had been updated")
+func (n *nginx) TestConfig() error {
+	log.Debug("test nginx config")
+	return n.executor.Exec("nginx -t")
 }
