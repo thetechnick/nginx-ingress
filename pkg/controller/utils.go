@@ -89,9 +89,9 @@ func (t *taskQueue) shutdown() {
 	<-t.workerDone
 }
 
-// NewTaskQueue creates a new task queue with the given sync function.
+// newTaskQueue creates a new task queue with the given sync function.
 // The sync function is called for every element inserted into the queue.
-func NewTaskQueue(syncFn func(string)) *taskQueue {
+func newTaskQueue(syncFn func(string)) *taskQueue {
 	return &taskQueue{
 		queue:      workqueue.New(),
 		sync:       syncFn,

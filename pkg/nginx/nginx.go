@@ -13,19 +13,13 @@ import (
 
 const dhparamFilename = "dhparam.pem"
 
-// NginxController Updates NGINX configuration, starts and reloads NGINX
-type NginxController struct {
+// Controller Updates NGINX configuration, starts and reloads NGINX
+type Controller struct {
 	nginxConfdPath string
 	nginxCertsPath string
 	local          bool
 	healthStatus   bool
 }
-
-// IngressNginxConfig describes an NGINX configuration
-// type IngressNginxConfig struct {
-// 	Upstreams []Upstream
-// 	Servers   []Server
-// }
 
 // Upstream describes an NGINX upstream
 type Upstream struct {
@@ -81,8 +75,8 @@ type Location struct {
 	ProxyMaxTempFileSize string
 }
 
-// NginxMainConfig describe the main NGINX configuration file
-type NginxMainConfig struct {
+// MainConfig describe the main NGINX configuration file
+type MainConfig struct {
 	ServerNamesHashBucketSize string
 	ServerNamesHashMaxSize    string
 	LogFormat                 string
@@ -105,9 +99,9 @@ func NewUpstreamWithDefaultServer(name string) Upstream {
 	}
 }
 
-// NewNginxController creates a NGINX controller
-func NewNginxController(nginxConfPath string, local bool, healthStatus bool) (*NginxController, error) {
-	ngxc := NginxController{
+// NewController creates a NGINX controller
+func NewController(nginxConfPath string, local bool, healthStatus bool) (*Controller, error) {
+	ngxc := Controller{
 		nginxConfdPath: path.Join(nginxConfPath, "conf.d"),
 		nginxCertsPath: path.Join(nginxConfPath, "ssl"),
 		local:          local,
@@ -118,7 +112,7 @@ func NewNginxController(nginxConfPath string, local bool, healthStatus bool) (*N
 		createDir(ngxc.nginxCertsPath)
 	}
 
-	cfg := &NginxMainConfig{ServerNamesHashMaxSize: NewDefaultConfig().MainServerNamesHashMaxSize}
+	cfg := &MainConfig{ServerNamesHashMaxSize: NewDefaultConfig().MainServerNamesHashMaxSize}
 	ngxc.UpdateMainConfigFile(cfg)
 
 	return &ngxc, nil
@@ -126,7 +120,7 @@ func NewNginxController(nginxConfPath string, local bool, healthStatus bool) (*N
 
 // DeleteIngress deletes the configuration file, which corresponds for the
 // specified ingress from NGINX conf directory
-func (nginx *NginxController) DeleteIngress(name string) {
+func (nginx *Controller) DeleteIngress(name string) {
 	filename := nginx.getIngressNginxConfigFileName(name)
 	glog.V(3).Infof("deleting %v", filename)
 
@@ -139,14 +133,14 @@ func (nginx *NginxController) DeleteIngress(name string) {
 
 // AddOrUpdateConfig creates or updates a file with
 // the specified configuration for the specified ingress
-func (nginx *NginxController) AddOrUpdateConfig(name string, config Server) {
+func (nginx *Controller) AddOrUpdateConfig(name string, config Server) {
 	glog.V(3).Infof("Updating NGINX configuration")
 	filename := nginx.getIngressNginxConfigFileName(name)
 	nginx.templateIt(config, filename)
 }
 
 // AddOrUpdateDHParam creates the servers dhparam.pem file
-func (nginx *NginxController) AddOrUpdateDHParam(dhparam string) (string, error) {
+func (nginx *Controller) AddOrUpdateDHParam(dhparam string) (string, error) {
 	fileName := nginx.nginxCertsPath + "/" + dhparamFilename
 	if !nginx.local {
 		pem, err := os.Create(fileName)
@@ -165,7 +159,7 @@ func (nginx *NginxController) AddOrUpdateDHParam(dhparam string) (string, error)
 
 // AddOrUpdateCertAndKey creates a .pem file wth the cert and the key with the
 // specified name
-func (nginx *NginxController) AddOrUpdateCertAndKey(name string, cert string, key string) string {
+func (nginx *Controller) AddOrUpdateCertAndKey(name string, cert string, key string) string {
 	pemFileName := nginx.nginxCertsPath + "/" + name + ".pem"
 
 	if !nginx.local {
@@ -194,14 +188,14 @@ func (nginx *NginxController) AddOrUpdateCertAndKey(name string, cert string, ke
 	return pemFileName
 }
 
-func (nginx *NginxController) getIngressNginxConfigFileName(name string) string {
+func (nginx *Controller) getIngressNginxConfigFileName(name string) string {
 	if name == emptyHost {
 		name = "default"
 	}
 	return path.Join(nginx.nginxConfdPath, name+".conf")
 }
 
-func (nginx *NginxController) templateIt(config Server, filename string) {
+func (nginx *Controller) templateIt(config Server, filename string) {
 	tmpl, err := template.New("ingress.tmpl").ParseFiles("ingress.tmpl")
 	if err != nil {
 		glog.Fatal("Failed to parse template file")
@@ -231,7 +225,7 @@ func (nginx *NginxController) templateIt(config Server, filename string) {
 }
 
 // Reload reloads NGINX
-func (nginx *NginxController) Reload() error {
+func (nginx *Controller) Reload() error {
 	if !nginx.local {
 		if err := shellOut("nginx -t"); err != nil {
 			return fmt.Errorf("Invalid nginx configuration detected, not reloading: %s", err)
@@ -246,7 +240,7 @@ func (nginx *NginxController) Reload() error {
 }
 
 // Start starts NGINX
-func (nginx *NginxController) Start() {
+func (nginx *Controller) Start() {
 	if !nginx.local {
 		if err := shellOut("nginx"); err != nil {
 			glog.Fatalf("Failed to start nginx: %v", err)
@@ -286,7 +280,7 @@ func shellOut(cmd string) (err error) {
 }
 
 // UpdateMainConfigFile update the main NGINX configuration file
-func (nginx *NginxController) UpdateMainConfigFile(cfg *NginxMainConfig) {
+func (nginx *Controller) UpdateMainConfigFile(cfg *MainConfig) {
 	cfg.HealthStatus = nginx.healthStatus
 
 	tmpl, err := template.New("nginx.conf.tmpl").ParseFiles("nginx.conf.tmpl")

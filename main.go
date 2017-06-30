@@ -77,7 +77,7 @@ func main() {
 		glog.Fatalf("Failed to create client: %v.", err)
 	}
 
-	ngxc, _ := nginx.NewNginxController("/etc/nginx/", *proxyURL != "", *healthStatus)
+	ngxc, _ := nginx.NewController("/etc/nginx/", *proxyURL != "", *healthStatus)
 	ngxc.Start()
 	nginxConfig := nginx.NewDefaultConfig()
 

@@ -14,14 +14,14 @@ const emptyHost = ""
 
 // Configurator transforms an Ingress resource into NGINX Configuration
 type Configurator struct {
-	nginx            *NginxController
+	nginx            *Controller
 	config           *Config
 	collisionHandler CollisionHandler
 	lock             sync.Mutex
 }
 
 // NewConfigurator creates a new Configurator
-func NewConfigurator(nginx *NginxController, collisionHandler CollisionHandler, config *Config) *Configurator {
+func NewConfigurator(nginx *Controller, collisionHandler CollisionHandler, config *Config) *Configurator {
 	cnf := Configurator{
 		nginx:            nginx,
 		config:           config,
@@ -451,7 +451,7 @@ func (cnf *Configurator) UpdateConfig(config *Config) {
 	defer cnf.lock.Unlock()
 
 	cnf.config = config
-	mainCfg := &NginxMainConfig{
+	mainCfg := &MainConfig{
 		HTTPSnippets:              config.MainHTTPSnippets,
 		ServerNamesHashBucketSize: config.MainServerNamesHashBucketSize,
 		ServerNamesHashMaxSize:    config.MainServerNamesHashMaxSize,

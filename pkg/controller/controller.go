@@ -42,7 +42,7 @@ const (
 )
 
 // LoadBalancerController watches Kubernetes API and
-// reconfigures NGINX via NginxController when needed
+// reconfigures NGINX via Controller when needed
 type LoadBalancerController struct {
 	client               kubernetes.Interface
 	ingController        cache.Controller
@@ -71,8 +71,8 @@ func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod tim
 		cnf:    cnf,
 	}
 
-	lbc.ingQueue = NewTaskQueue(lbc.syncIng)
-	lbc.endpQueue = NewTaskQueue(lbc.syncEndp)
+	lbc.ingQueue = newTaskQueue(lbc.syncIng)
+	lbc.endpQueue = newTaskQueue(lbc.syncEndp)
 
 	ingHandlers := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -195,7 +195,7 @@ func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod tim
 			glog.Warning(err)
 		} else {
 			lbc.watchNginxConfigMaps = true
-			lbc.cfgmQueue = NewTaskQueue(lbc.syncCfgm)
+			lbc.cfgmQueue = newTaskQueue(lbc.syncCfgm)
 
 			cfgmHandlers := cache.ResourceEventHandlerFuncs{
 				AddFunc: func(obj interface{}) {
