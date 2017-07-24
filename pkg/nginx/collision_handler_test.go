@@ -3,6 +3,8 @@ package nginx
 import (
 	"time"
 
+	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
@@ -11,17 +13,17 @@ var (
 	//
 	// Ingress 1
 	//
-	ingress1Upstream1 = Upstream{
+	ingress1Upstream1 = config.Upstream{
 		Name: "default-ing1-one.example.com-svc1",
 	}
-	ingress1Location1 = Location{
+	ingress1Location1 = config.Location{
 		Path:     "/1",
 		Upstream: ingress1Upstream1,
 	}
-	ingress1Server1 = Server{
+	ingress1Server1 = config.Server{
 		Name:      "one.example.com",
-		Locations: []Location{ingress1Location1},
-		Upstreams: []Upstream{ingress1Upstream1},
+		Locations: []config.Location{ingress1Location1},
+		Upstreams: []config.Upstream{ingress1Upstream1},
 	}
 	// ingress1Config1 = IngressNginxConfig{
 	// 	Upstreams: []Upstream{ingress1Upstream1},
@@ -38,33 +40,33 @@ var (
 	//
 	// Ingress 2
 	//
-	ingress2Upstream1 = Upstream{
+	ingress2Upstream1 = config.Upstream{
 		Name: "default-ing2-one.example.com-svc1",
 	}
-	ingress2Upstream2 = Upstream{
+	ingress2Upstream2 = config.Upstream{
 		Name: "default-ing2-two.example.com-svc1",
 	}
-	ingress2Location1 = Location{
+	ingress2Location1 = config.Location{
 		Path:     "/1",
 		Upstream: ingress2Upstream1,
 	}
-	ingress2Location2 = Location{
+	ingress2Location2 = config.Location{
 		Path:     "/2",
 		Upstream: ingress2Upstream1,
 	}
-	ingress2Location3 = Location{
+	ingress2Location3 = config.Location{
 		Path:     "/3",
 		Upstream: ingress2Upstream2,
 	}
-	ingress2Server1 = Server{
+	ingress2Server1 = config.Server{
 		Name:      "one.example.com",
-		Upstreams: []Upstream{ingress2Upstream1},
-		Locations: []Location{ingress2Location1, ingress2Location2},
+		Upstreams: []config.Upstream{ingress2Upstream1},
+		Locations: []config.Location{ingress2Location1, ingress2Location2},
 	}
-	ingress2Server2 = Server{
+	ingress2Server2 = config.Server{
 		Name:      "two.example.com",
-		Upstreams: []Upstream{ingress2Upstream2},
-		Locations: []Location{ingress2Location3},
+		Upstreams: []config.Upstream{ingress2Upstream2},
+		Locations: []config.Location{ingress2Location3},
 	}
 	// ingress2Config1 = IngressNginxConfig{
 	// 	Upstreams: []Upstream{ingress2Upstream1},
@@ -87,16 +89,16 @@ var (
 	//
 	// Ingress 3
 	//
-	ingress3Upstream1 = Upstream{
+	ingress3Upstream1 = config.Upstream{
 		Name: "default-ing3-one.example.com-svc1",
 	}
-	ingress3Location1 = Location{
+	ingress3Location1 = config.Location{
 		Path:     "/1",
 		Upstream: ingress3Upstream1,
 	}
-	ingress3Server1 = Server{
+	ingress3Server1 = config.Server{
 		Name:      "one.example.com",
-		Locations: []Location{ingress3Location1},
+		Locations: []config.Location{ingress3Location1},
 		// this server introduces additional settings,
 		// because the merging process is additive they will be
 		// used regardless of age

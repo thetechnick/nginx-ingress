@@ -6,6 +6,7 @@ import (
 
 	"github.com/golang/glog"
 
+	ingress_config "gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/controller"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/nginx"
 	"k8s.io/client-go/kubernetes"
@@ -79,7 +80,7 @@ func main() {
 
 	ngxc, _ := nginx.NewController("/etc/nginx/", *proxyURL != "", *healthStatus)
 	ngxc.Start()
-	nginxConfig := nginx.NewDefaultConfig()
+	nginxConfig := ingress_config.NewDefaultConfig()
 
 	var collisionHandler nginx.CollisionHandler
 	if *enableMerging {

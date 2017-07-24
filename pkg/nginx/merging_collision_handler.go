@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 
+	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
+
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 
@@ -21,7 +23,7 @@ func NewMergingCollisionHandler() CollisionHandler {
 	}
 }
 
-func (m *mergingCollisionHandler) AddConfigs(ingress *extensions.Ingress, servers []Server) ([]Server, error) {
+func (m *mergingCollisionHandler) AddConfigs(ingress *extensions.Ingress, servers []config.Server) ([]config.Server, error) {
 	ingressKey := fmt.Sprintf("%s/%s", ingress.GetNamespace(), ingress.GetName())
 	m.cache[ingressKey] = cacheEntry{
 		Ingress: *ingress,
@@ -34,21 +36,21 @@ func (m *mergingCollisionHandler) AddConfigs(ingress *extensions.Ingress, server
 	}
 	m.updateHostIngressMapping(ingressKey, hosts)
 
-	result := []Server{}
+	result := []config.Server{}
 	for _, server := range servers {
 		result = append(result, *m.addOrUpdateServer(&server))
 	}
 	return result, nil
 }
 
-func (m *mergingCollisionHandler) RemoveConfigs(ingressKey string) ([]Server, []Server, error) {
+func (m *mergingCollisionHandler) RemoveConfigs(ingressKey string) ([]config.Server, []config.Server, error) {
 	deletedCacheEntry, exists := m.cache[ingressKey]
 	if !exists {
 		return nil, nil, fmt.Errorf("Ingress '%s' cannot be removed, because it was not found in the mapping", ingressKey)
 	}
 	delete(m.cache, ingressKey)
 
-	changed := []Server{}
+	changed := []config.Server{}
 	affectedHosts := []string{}
 	for _, server := range deletedCacheEntry.Servers {
 		affectedHosts = append(affectedHosts, server.Name)
@@ -79,7 +81,7 @@ func (m *mergingCollisionHandler) RemoveConfigs(ingressKey string) ([]Server, []
 		changed = append(changed, *baseServer)
 	}
 
-	deleted := []Server{}
+	deleted := []config.Server{}
 	for _, server := range deletedCacheEntry.Servers {
 		if _, ok := stillExistingHosts[server.Name]; !ok {
 			deleted = append(deleted, server)
@@ -89,8 +91,8 @@ func (m *mergingCollisionHandler) RemoveConfigs(ingressKey string) ([]Server, []
 	return changed, deleted, nil
 }
 
-func (m *mergingCollisionHandler) addOrUpdateServer(server *Server) *Server {
-	var baseServer Server
+func (m *mergingCollisionHandler) addOrUpdateServer(server *config.Server) *config.Server {
+	var baseServer config.Server
 	if len(m.hostIngressMapping[server.Name]) > 1 {
 		// the server must be composed of multiple ingress objects
 		servers := m.getOrderedServerList(server.Name)
@@ -109,14 +111,14 @@ func (m *mergingCollisionHandler) addOrUpdateServer(server *Server) *Server {
 	return &baseServer
 }
 
-func (m *mergingCollisionHandler) getOrderedServerList(host string) []Server {
+func (m *mergingCollisionHandler) getOrderedServerList(host string) []config.Server {
 	affectedCacheEntries := cacheEntryList{}
 	for ingressName := range m.hostIngressMapping[host] {
 		affectedCacheEntries = append(affectedCacheEntries, m.cache[ingressName])
 	}
 	sort.Sort(affectedCacheEntries)
 
-	results := []Server{}
+	results := []config.Server{}
 	for _, cacheEntry := range affectedCacheEntries {
 		for _, server := range cacheEntry.Servers {
 			if server.Name == host {
@@ -127,21 +129,21 @@ func (m *mergingCollisionHandler) getOrderedServerList(host string) []Server {
 	return results
 }
 
-func (m *mergingCollisionHandler) getUpstreamsForServer(server *Server) []Upstream {
-	tmp := map[string]Upstream{}
+func (m *mergingCollisionHandler) getUpstreamsForServer(server *config.Server) []config.Upstream {
+	tmp := map[string]config.Upstream{}
 	for _, location := range server.Locations {
 		tmp[location.Upstream.Name] = location.Upstream
 	}
 
-	result := []Upstream{}
+	result := []config.Upstream{}
 	for _, upstream := range tmp {
 		result = append(result, upstream)
 	}
 	return result
 }
 
-func (m *mergingCollisionHandler) mergeServers(base Server, merge *Server) *Server {
-	locationMap := map[string]Location{}
+func (m *mergingCollisionHandler) mergeServers(base config.Server, merge *config.Server) *config.Server {
+	locationMap := map[string]config.Location{}
 	for _, location := range base.Locations {
 		locationMap[location.Path] = location
 	}
@@ -163,7 +165,7 @@ func (m *mergingCollisionHandler) mergeServers(base Server, merge *Server) *Serv
 		base.HSTSIncludeSubdomains = merge.HSTSIncludeSubdomains
 	}
 
-	base.Locations = []Location{}
+	base.Locations = []config.Location{}
 	for _, location := range locationMap {
 		base.Locations = append(base.Locations, location)
 	}

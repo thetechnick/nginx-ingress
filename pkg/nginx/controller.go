@@ -6,6 +6,7 @@ import (
 	"path"
 	"text/template"
 
+	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/shell"
 
 	"github.com/golang/glog"
@@ -22,81 +23,13 @@ type Controller struct {
 	nginx          Nginx
 }
 
-// Upstream describes an NGINX upstream
-type Upstream struct {
-	Name            string
-	UpstreamServers []UpstreamServer
-}
-
-// UpstreamServer describes a server in an NGINX upstream
-type UpstreamServer struct {
-	Address string
-	Port    string
-}
-
-// Server describes an NGINX server
-type Server struct {
-	ServerSnippets        []string
-	Name                  string
-	ServerTokens          bool
-	Locations             []Location
-	Upstreams             []Upstream
-	SSL                   bool
-	SSLCertificate        string
-	SSLCertificateKey     string
-	HTTP2                 bool
-	RedirectToHTTPS       bool
-	ProxyProtocol         bool
-	HSTS                  bool
-	HSTSMaxAge            int64
-	HSTSIncludeSubdomains bool
-	ProxyHideHeaders      []string
-	ProxyPassHeaders      []string
-
-	// http://nginx.org/en/docs/http/ngx_http_realip_module.html
-	RealIPHeader    string
-	SetRealIPFrom   []string
-	RealIPRecursive bool
-}
-
-// Location describes an NGINX location
-type Location struct {
-	LocationSnippets     []string
-	Path                 string
-	Upstream             Upstream
-	ProxyConnectTimeout  string
-	ProxyReadTimeout     string
-	ClientMaxBodySize    string
-	Websocket            bool
-	Rewrite              string
-	SSL                  bool
-	ProxyBuffering       bool
-	ProxyBuffers         string
-	ProxyBufferSize      string
-	ProxyMaxTempFileSize string
-}
-
-// MainConfig describe the main NGINX configuration file
-type MainConfig struct {
-	ServerNamesHashBucketSize string
-	ServerNamesHashMaxSize    string
-	LogFormat                 string
-	HealthStatus              bool
-	HTTPSnippets              []string
-	// http://nginx.org/en/docs/http/ngx_http_ssl_module.html
-	SSLProtocols           string
-	SSLPreferServerCiphers bool
-	SSLCiphers             string
-	SSLDHParam             string
-}
-
 // NewUpstreamWithDefaultServer creates an upstream with the default server.
 // proxy_pass to an upstream with the default server returns 502.
 // We use it for services that have no endpoints
-func NewUpstreamWithDefaultServer(name string) Upstream {
-	return Upstream{
+func NewUpstreamWithDefaultServer(name string) config.Upstream {
+	return config.Upstream{
 		Name:            name,
-		UpstreamServers: []UpstreamServer{UpstreamServer{Address: "127.0.0.1", Port: "8181"}},
+		UpstreamServers: []config.UpstreamServer{config.UpstreamServer{Address: "127.0.0.1", Port: "8181"}},
 	}
 }
 
@@ -110,7 +43,7 @@ func NewController(nginxConfPath string, local bool, healthStatus bool) (*Contro
 		nginx:          NewNginx(shell.NewShellExecutor()),
 	}
 
-	cfg := &MainConfig{ServerNamesHashMaxSize: NewDefaultConfig().MainServerNamesHashMaxSize}
+	cfg := &config.MainConfig{ServerNamesHashMaxSize: config.NewDefaultConfig().MainServerNamesHashMaxSize}
 	ngxc.UpdateMainConfigFile(cfg)
 
 	return &ngxc, nil
@@ -131,7 +64,7 @@ func (nginx *Controller) DeleteIngress(name string) {
 
 // AddOrUpdateConfig creates or updates a file with
 // the specified configuration for the specified ingress
-func (nginx *Controller) AddOrUpdateConfig(name string, config Server) {
+func (nginx *Controller) AddOrUpdateConfig(name string, config config.Server) {
 	glog.V(3).Infof("Updating NGINX configuration")
 	filename := nginx.getIngressNginxConfigFileName(name)
 	nginx.templateIt(config, filename)
@@ -193,7 +126,7 @@ func (nginx *Controller) getIngressNginxConfigFileName(name string) string {
 	return path.Join(nginx.nginxConfdPath, name+".conf")
 }
 
-func (nginx *Controller) templateIt(config Server, filename string) {
+func (nginx *Controller) templateIt(config config.Server, filename string) {
 	tmpl, err := template.New("ingress.tmpl").ParseFiles("ingress.tmpl")
 	if err != nil {
 		glog.Fatal("Failed to parse template file")
@@ -255,7 +188,7 @@ func createDir(path string) {
 }
 
 // UpdateMainConfigFile update the main NGINX configuration file
-func (nginx *Controller) UpdateMainConfigFile(cfg *MainConfig) {
+func (nginx *Controller) UpdateMainConfigFile(cfg *config.MainConfig) {
 	cfg.HealthStatus = nginx.healthStatus
 
 	tmpl, err := template.New("nginx.conf.tmpl").ParseFiles("nginx.conf.tmpl")

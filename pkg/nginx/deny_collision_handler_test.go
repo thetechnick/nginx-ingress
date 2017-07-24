@@ -3,6 +3,8 @@ package nginx
 import (
 	"testing"
 
+	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -10,7 +12,7 @@ func TestDenyCollisionHandler(t *testing.T) {
 	ch := NewDenyCollisionHandler()
 	t.Run("Add first ingress", func(t *testing.T) {
 		assert := assert.New(t)
-		result, err := ch.AddConfigs(&ingress1, []Server{ingress1Server1})
+		result, err := ch.AddConfigs(&ingress1, []config.Server{ingress1Server1})
 		if assert.NoError(err) && assert.NotNil(result) && assert.Len(result, 1) {
 			assert.Equal(result[0], ingress1Server1)
 		}
@@ -18,7 +20,7 @@ func TestDenyCollisionHandler(t *testing.T) {
 
 	t.Run("Add 2nd ingress", func(t *testing.T) {
 		assert := assert.New(t)
-		result, err := ch.AddConfigs(&ingress2, []Server{ingress2Server1, ingress2Server2})
+		result, err := ch.AddConfigs(&ingress2, []config.Server{ingress2Server1, ingress2Server2})
 		if assert.NoError(err) && assert.Len(result, 2, "Unexpected number of configs returned") {
 			// 1. servername
 			assert.Equal(ingress2Server1.Name, result[0].Name, "Server names do not match")
@@ -52,7 +54,7 @@ func TestDenyCollisionHandler(t *testing.T) {
 
 	t.Run("Add 3rd ingress", func(t *testing.T) {
 		assert := assert.New(t)
-		changed, err := ch.AddConfigs(&ingress3, []Server{ingress3Server1})
+		changed, err := ch.AddConfigs(&ingress3, []config.Server{ingress3Server1})
 		if assert.NoError(err) {
 			assert.Len(changed, 0, "Unexpected number of changed servers")
 		}

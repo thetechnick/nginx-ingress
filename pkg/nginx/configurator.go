@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
+	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
 	api_v1 "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
@@ -15,13 +16,13 @@ const emptyHost = ""
 // Configurator transforms an Ingress resource into NGINX Configuration
 type Configurator struct {
 	nginx            *Controller
-	config           *Config
+	config           *config.Config
 	collisionHandler CollisionHandler
 	lock             sync.Mutex
 }
 
 // NewConfigurator creates a new Configurator
-func NewConfigurator(nginx *Controller, collisionHandler CollisionHandler, config *Config) *Configurator {
+func NewConfigurator(nginx *Controller, collisionHandler CollisionHandler, config *config.Config) *Configurator {
 	cnf := Configurator{
 		nginx:            nginx,
 		config:           config,
@@ -89,13 +90,13 @@ func (cnf *Configurator) updateCertificates(ingEx *IngressEx) map[string]string 
 
 	return pems
 }
-func (cnf *Configurator) generateNginxCfg(ingEx *IngressEx, pems map[string]string) []Server {
+func (cnf *Configurator) generateNginxCfg(ingEx *IngressEx, pems map[string]string) []config.Server {
 	ingCfg := cnf.createConfig(ingEx)
 
 	wsServices := getWebsocketServices(ingEx)
 	rewrites := getRewrites(ingEx)
 	sslServices := getSSLServices(ingEx)
-	servers := []Server{}
+	servers := []config.Server{}
 
 	for _, rule := range ingEx.Ingress.Spec.Rules {
 		if rule.IngressRuleValue.HTTP == nil {
@@ -108,8 +109,8 @@ func (cnf *Configurator) generateNginxCfg(ingEx *IngressEx, pems map[string]stri
 			glog.Warningf("Host field of ingress rule in %v/%v is empty", ingEx.Ingress.Namespace, ingEx.Ingress.Name)
 		}
 
-		var locations []Location
-		upstreams := map[string]Upstream{}
+		var locations []config.Location
+		upstreams := map[string]config.Upstream{}
 		rootLocation := false
 
 		for _, path := range rule.HTTP.Paths {
@@ -134,7 +135,7 @@ func (cnf *Configurator) generateNginxCfg(ingEx *IngressEx, pems map[string]stri
 			locations = append(locations, loc)
 		}
 
-		server := Server{
+		server := config.Server{
 			Name:                  serverName,
 			Locations:             locations,
 			ServerTokens:          ingCfg.ServerTokens,
@@ -166,11 +167,11 @@ func (cnf *Configurator) generateNginxCfg(ingEx *IngressEx, pems map[string]stri
 		upstream := cnf.createUpstream(ingEx, upsName, ingEx.Ingress.Spec.Backend, ingEx.Ingress.Namespace)
 		location := createLocation(pathOrDefault("/"), upstream, &ingCfg, wsServices[ingEx.Ingress.Spec.Backend.ServiceName], rewrites[ingEx.Ingress.Spec.Backend.ServiceName], sslServices[ingEx.Ingress.Spec.Backend.ServiceName])
 
-		server := Server{
+		server := config.Server{
 			Name:                  emptyHost,
 			ServerTokens:          ingCfg.ServerTokens,
-			Upstreams:             []Upstream{upstream},
-			Locations:             []Location{location},
+			Upstreams:             []config.Upstream{upstream},
+			Locations:             []config.Location{location},
 			HTTP2:                 ingCfg.HTTP2,
 			RedirectToHTTPS:       ingCfg.RedirectToHTTPS,
 			ProxyProtocol:         ingCfg.ProxyProtocol,
@@ -197,7 +198,7 @@ func (cnf *Configurator) generateNginxCfg(ingEx *IngressEx, pems map[string]stri
 	return servers
 }
 
-func (cnf *Configurator) createConfig(ingEx *IngressEx) Config {
+func (cnf *Configurator) createConfig(ingEx *IngressEx) config.Config {
 	ingCfg := *cnf.config
 	if serverTokens, exists, err := GetMapKeyAsBool(ingEx.Ingress.Annotations, "nginx.org/server-tokens", ingEx.Ingress); exists {
 		if err != nil {
@@ -370,8 +371,8 @@ func getSSLServices(ingEx *IngressEx) map[string]bool {
 	return sslServices
 }
 
-func createLocation(path string, upstream Upstream, cfg *Config, websocket bool, rewrite string, ssl bool) Location {
-	loc := Location{
+func createLocation(path string, upstream config.Upstream, cfg *config.Config, websocket bool, rewrite string, ssl bool) config.Location {
+	loc := config.Location{
 		Path:                 path,
 		Upstream:             upstream,
 		ProxyConnectTimeout:  cfg.ProxyConnectTimeout,
@@ -390,15 +391,18 @@ func createLocation(path string, upstream Upstream, cfg *Config, websocket bool,
 	return loc
 }
 
-func (cnf *Configurator) createUpstream(ingEx *IngressEx, name string, backend *extensions.IngressBackend, namespace string) Upstream {
+func (cnf *Configurator) createUpstream(ingEx *IngressEx, name string, backend *extensions.IngressBackend, namespace string) config.Upstream {
 	ups := NewUpstreamWithDefaultServer(name)
 
 	endps, exists := ingEx.Endpoints[backend.ServiceName+backend.ServicePort.String()]
 	if exists {
-		var upsServers []UpstreamServer
+		var upsServers []config.UpstreamServer
 		for _, endp := range endps {
 			addressport := strings.Split(endp, ":")
-			upsServers = append(upsServers, UpstreamServer{addressport[0], addressport[1]})
+			upsServers = append(upsServers, config.UpstreamServer{
+				Address: addressport[0],
+				Port:    addressport[1],
+			})
 		}
 		if len(upsServers) > 0 {
 			ups.UpstreamServers = upsServers
@@ -419,8 +423,8 @@ func getNameForUpstream(ing *extensions.Ingress, host string, service string) st
 	return fmt.Sprintf("%v-%v-%v-%v", ing.Namespace, ing.Name, host, service)
 }
 
-func upstreamMapToSlice(upstreams map[string]Upstream) []Upstream {
-	result := make([]Upstream, 0, len(upstreams))
+func upstreamMapToSlice(upstreams map[string]config.Upstream) []config.Upstream {
+	result := make([]config.Upstream, 0, len(upstreams))
 
 	for _, ups := range upstreams {
 		result = append(result, ups)
@@ -446,20 +450,20 @@ func (cnf *Configurator) UpdateEndpoints(name string, ingEx *IngressEx) {
 }
 
 // UpdateConfig updates NGINX Configuration parameters
-func (cnf *Configurator) UpdateConfig(config *Config) {
+func (cnf *Configurator) UpdateConfig(c *config.Config) {
 	cnf.lock.Lock()
 	defer cnf.lock.Unlock()
 
-	cnf.config = config
-	mainCfg := &MainConfig{
-		HTTPSnippets:              config.MainHTTPSnippets,
-		ServerNamesHashBucketSize: config.MainServerNamesHashBucketSize,
-		ServerNamesHashMaxSize:    config.MainServerNamesHashMaxSize,
-		LogFormat:                 config.MainLogFormat,
-		SSLProtocols:              config.MainServerSSLProtocols,
-		SSLCiphers:                config.MainServerSSLCiphers,
-		SSLDHParam:                config.MainServerSSLDHParam,
-		SSLPreferServerCiphers:    config.MainServerSSLPreferServerCiphers,
+	cnf.config = c
+	mainCfg := &config.MainConfig{
+		HTTPSnippets:              c.MainHTTPSnippets,
+		ServerNamesHashBucketSize: c.MainServerNamesHashBucketSize,
+		ServerNamesHashMaxSize:    c.MainServerNamesHashMaxSize,
+		LogFormat:                 c.MainLogFormat,
+		SSLProtocols:              c.MainServerSSLProtocols,
+		SSLCiphers:                c.MainServerSSLCiphers,
+		SSLDHParam:                c.MainServerSSLDHParam,
+		SSLPreferServerCiphers:    c.MainServerSSLPreferServerCiphers,
 	}
 
 	cnf.nginx.UpdateMainConfigFile(mainCfg)

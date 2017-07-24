@@ -3,11 +3,13 @@ package nginx
 import (
 	"testing"
 
+	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
+
 	"github.com/stretchr/testify/assert"
 )
 
 func TestMergingCollisionHandler(t *testing.T) {
-	testServerHasDefaultSettings := func(assert *assert.Assertions, server *Server) {
+	testServerHasDefaultSettings := func(assert *assert.Assertions, server *config.Server) {
 		assert.False(server.SSL, "SSL should not be active")
 		assert.Empty(server.SSLCertificate, "SSLCertificate should be empty")
 		assert.Empty(server.SSLCertificateKey, "SSLCertificateKey should be empty")
@@ -17,7 +19,7 @@ func TestMergingCollisionHandler(t *testing.T) {
 		assert.False(server.HSTSIncludeSubdomains, "HSTSIncludeSubdomains should not be active")
 	}
 
-	testServerHasSettingsFromIngress3Server1 := func(assert *assert.Assertions, server *Server) {
+	testServerHasSettingsFromIngress3Server1 := func(assert *assert.Assertions, server *config.Server) {
 		assert.True(server.SSL, "SSL should be active")
 		assert.Equal("cert.pem", server.SSLCertificate, "SSLCertificate is not set")
 		assert.Equal("cert.pem", server.SSLCertificateKey, "SSLCertificateKey is not set")
@@ -30,7 +32,7 @@ func TestMergingCollisionHandler(t *testing.T) {
 	i := NewMergingCollisionHandler()
 	t.Run("First ingress", func(t *testing.T) {
 		assert := assert.New(t)
-		result, err := i.AddConfigs(&ingress1, []Server{ingress1Server1})
+		result, err := i.AddConfigs(&ingress1, []config.Server{ingress1Server1})
 		if assert.NoError(err) && assert.NotNil(result) && assert.Len(result, 1) {
 			assert.Equal(result[0], ingress1Server1)
 		}
@@ -38,7 +40,7 @@ func TestMergingCollisionHandler(t *testing.T) {
 
 	t.Run("Merge 2nd ingress", func(t *testing.T) {
 		assert := assert.New(t)
-		result, err := i.AddConfigs(&ingress2, []Server{ingress2Server1, ingress2Server2})
+		result, err := i.AddConfigs(&ingress2, []config.Server{ingress2Server1, ingress2Server2})
 		if assert.NoError(err) && assert.Len(result, 2, "Unexpected number of configs returned") {
 			// 1. IngressNginxConfig
 			assert.Equal(ingress2Server1.Name, result[0].Name, "Server names do not match")
@@ -62,7 +64,7 @@ func TestMergingCollisionHandler(t *testing.T) {
 
 	t.Run("Merge 3rd ingress", func(t *testing.T) {
 		assert := assert.New(t)
-		result, err := i.AddConfigs(&ingress3, []Server{ingress3Server1})
+		result, err := i.AddConfigs(&ingress3, []config.Server{ingress3Server1})
 		if assert.NoError(err) && assert.Len(result, 1, "Unexpected number of configs returned") {
 			// 1. IngressNginxConfig
 			// The order of locations is not fixed, so we must use contains

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 
+	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
+
 	"github.com/golang/glog"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
@@ -23,13 +25,13 @@ func NewDenyCollisionHandler() CollisionHandler {
 	}
 }
 
-func (n *denyCollisionHandler) AddConfigs(ingress *extensions.Ingress, servers []Server) ([]Server, error) {
+func (n *denyCollisionHandler) AddConfigs(ingress *extensions.Ingress, servers []config.Server) ([]config.Server, error) {
 	ingressKey := fmt.Sprintf("%s/%s", ingress.GetNamespace(), ingress.GetName())
 	n.cache[ingressKey] = cacheEntry{
 		Ingress: *ingress,
 		Servers: servers,
 	}
-	serversWithoutConflict := []Server{}
+	serversWithoutConflict := []config.Server{}
 	for _, server := range servers {
 		if ingressLockingServerName, exists := n.hostIngressMapping[server.Name]; exists {
 			// there is already a config using this servername
@@ -47,7 +49,7 @@ func (n *denyCollisionHandler) AddConfigs(ingress *extensions.Ingress, servers [
 	return serversWithoutConflict, nil
 }
 
-func (n *denyCollisionHandler) RemoveConfigs(ingressKey string) ([]Server, []Server, error) {
+func (n *denyCollisionHandler) RemoveConfigs(ingressKey string) ([]config.Server, []config.Server, error) {
 	deletedCacheEntry, exists := n.cache[ingressKey]
 	if !exists {
 		return nil, nil, fmt.Errorf("Ingress '%s' cannot be removed, because it was not found in the mapping", ingressKey)
@@ -55,8 +57,8 @@ func (n *denyCollisionHandler) RemoveConfigs(ingressKey string) ([]Server, []Ser
 	delete(n.cache, ingressKey)
 
 	freedServerNames := n.getServerNamesBlockedByIngressKey(ingressKey)
-	changedServers := []Server{}
-	deletedServers := []Server{}
+	changedServers := []config.Server{}
+	deletedServers := []config.Server{}
 	for _, serverName := range freedServerNames {
 		// server name is now free again
 		delete(n.hostIngressMapping, serverName)
@@ -104,7 +106,7 @@ func (n *denyCollisionHandler) getCacheEntryServersByServerName(serverName strin
 
 	results := []*cacheEntry{}
 	for _, entry := range entryList {
-		servers := []Server{}
+		servers := []config.Server{}
 		for _, server := range entry.Servers {
 			if server.Name == serverName {
 				servers = append(servers, server)

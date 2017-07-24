@@ -24,6 +24,7 @@ import (
 
 	"github.com/golang/glog"
 
+	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/nginx"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -295,7 +296,7 @@ func (lbc *LoadBalancerController) syncCfgm(key string) {
 		lbc.cfgmQueue.requeue(key, err)
 		return
 	}
-	cfg := nginx.NewDefaultConfig()
+	cfg := config.NewDefaultConfig()
 
 	if cfgmExists {
 		cfgm := obj.(*api_v1.ConfigMap)
