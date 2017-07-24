@@ -2,13 +2,14 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"time"
 
 	"github.com/golang/glog"
-
 	ingress_config "gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/controller"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/nginx"
+	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/version"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/rest"
@@ -17,9 +18,6 @@ import (
 )
 
 var (
-	// Set during build
-	version string
-
 	healthStatus = flag.Bool("health-status", false,
 		`If present, the default server listening on port 80 with the health check
 		location "/nginx-health" gets added to the main nginx configuration.`)
@@ -46,13 +44,20 @@ var (
 		the oldest ingress object as a base and adding the locations and settings of
 		every ingress object in descending oder of their age.
 		This is similar to the behavoir of other nginx ingress controller.`)
+
+	printVersion = flag.Bool("version", false, "Print version and exit")
 )
 
 func main() {
 	flag.Parse()
 	flag.Lookup("logtostderr").Value.Set("true")
 
-	glog.Infof("Starting NGINX Ingress controller Version %v\n", version)
+	if *printVersion {
+		fmt.Printf("NGINX Ingress controller version: %s\n", version.Version)
+		return
+	}
+
+	glog.Infof("Starting NGINX Ingress controller Version %v\n", version.Version)
 
 	var err error
 	var config *rest.Config
