@@ -6,7 +6,7 @@ import (
 
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
 
-	"github.com/golang/glog"
+	log "github.com/sirupsen/logrus"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 
@@ -38,7 +38,7 @@ func (n *denyCollisionHandler) AddConfigs(ingress *extensions.Ingress, servers [
 			if n.cache[ingressLockingServerName].Ingress.CreationTimestamp.Before(ingress.CreationTimestamp) {
 				// the ingress object currently holding the lock on this server name is older than the new one,
 				// so it is still holder of the log
-				glog.Errorf("Conflicting server with name '%s' in ingress %s/%s, a server with this name is already defined in ingress %s, ignored", server.Name, ingress.GetNamespace(), ingress.GetName(), ingressLockingServerName)
+				log.Errorf("Conflicting server with name '%s' in ingress %s/%s, a server with this name is already defined in ingress %s, ignored", server.Name, ingress.GetNamespace(), ingress.GetName(), ingressLockingServerName)
 				continue
 			}
 		}

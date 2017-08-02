@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/golang/glog"
+	log "github.com/sirupsen/logrus"
 	ingress_config "gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/controller"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/nginx"
@@ -51,13 +51,14 @@ var (
 func main() {
 	flag.Parse()
 	flag.Lookup("logtostderr").Value.Set("true")
+	log.SetFormatter(&log.JSONFormatter{})
 
 	if *printVersion {
 		fmt.Printf("NGINX Ingress controller version: %s\n", version.Version)
 		return
 	}
 
-	glog.Infof("Starting NGINX Ingress controller Version %v\n", version.Version)
+	log.Infof("Starting NGINX Ingress controller Version %v\n", version.Version)
 
 	var err error
 	var config *rest.Config
@@ -70,17 +71,17 @@ func main() {
 				},
 			}).ClientConfig()
 		if err != nil {
-			glog.Fatalf("error creating client configuration: %v", err)
+			log.Fatalf("error creating client configuration: %v", err)
 		}
 	} else {
 		if config, err = rest.InClusterConfig(); err != nil {
-			glog.Fatalf("error creating client configuration: %v", err)
+			log.Fatalf("error creating client configuration: %v", err)
 		}
 	}
 
 	kubeClient, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		glog.Fatalf("Failed to create client: %v.", err)
+		log.Fatalf("Failed to create client: %v.", err)
 	}
 
 	ngxc, _ := nginx.NewController("/etc/nginx/", *proxyURL != "", *healthStatus)

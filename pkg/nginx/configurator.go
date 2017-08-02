@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/golang/glog"
+	log "github.com/sirupsen/logrus"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
 	api_v1 "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
@@ -46,14 +46,22 @@ func (cnf *Configurator) AddOrUpdateIngress(name string, ingEx *IngressEx) {
 	generatedServers := cnf.generateNginxCfg(ingEx, pems)
 	servers, err := cnf.collisionHandler.AddConfigs(ingEx.Ingress, generatedServers)
 	if err != nil {
-		glog.Errorf("Error when checking generated servers for collisions: %v", err)
+		log.
+			WithField("namespace", ingEx.Ingress.Namespace).
+			WithField("name", ingEx.Ingress.Name).
+			WithError(err).
+			Error("Error when checking generated servers for collisions")
 		return
 	}
 	for _, server := range servers {
 		cnf.nginx.AddOrUpdateConfig(server.Name, server)
 	}
 	if err := cnf.nginx.Reload(); err != nil {
-		glog.Errorf("Error when adding or updating ingress %q: %q", name, err)
+		log.
+			WithField("namespace", ingEx.Ingress.Namespace).
+			WithField("name", ingEx.Ingress.Name).
+			WithError(err).
+			Error("Error when adding or updating ingress")
 	}
 }
 
@@ -68,12 +76,18 @@ func (cnf *Configurator) updateCertificates(ingEx *IngressEx) map[string]string 
 		}
 		cert, ok := secret.Data[api_v1.TLSCertKey]
 		if !ok {
-			glog.Warningf("Secret %v has no cert", secretName)
+			log.
+				WithField("namespace", secret.Namespace).
+				WithField("name", secret.Name).
+				Error("Secret has no cert, skipping")
 			continue
 		}
 		key, ok := secret.Data[api_v1.TLSPrivateKeyKey]
 		if !ok {
-			glog.Warningf("Secret %v has no private key", secretName)
+			log.
+				WithField("namespace", secret.Namespace).
+				WithField("name", secret.Name).
+				Error("Secret has no private key, skipping")
 			continue
 		}
 
@@ -92,9 +106,18 @@ func (cnf *Configurator) updateCertificates(ingEx *IngressEx) map[string]string 
 }
 func (cnf *Configurator) generateNginxCfg(ingEx *IngressEx, pems map[string]string) []config.Server {
 	ingCfg := cnf.createConfig(ingEx)
+	ing := ingEx.Ingress
 
 	wsServices := getWebsocketServices(ingEx)
-	rewrites := getRewrites(ingEx)
+	rewrites, err := getRewrites(ingEx)
+	if err != nil {
+		log.
+			WithField("namespace", ing.Namespace).
+			WithField("name", ing.Name).
+			WithField("annotation", "nginx.org/rewrites").
+			WithError(err).
+			Error("Error parsing ingress annotation, skipping")
+	}
 	sslServices := getSSLServices(ingEx)
 	servers := []config.Server{}
 
@@ -106,7 +129,10 @@ func (cnf *Configurator) generateNginxCfg(ingEx *IngressEx, pems map[string]stri
 		serverName := rule.Host
 
 		if rule.Host == emptyHost {
-			glog.Warningf("Host field of ingress rule in %v/%v is empty", ingEx.Ingress.Namespace, ingEx.Ingress.Name)
+			log.
+				WithField("namespace", ingEx.Ingress.Namespace).
+				WithField("name", ingEx.Ingress.Name).
+				Warning("Host field of ingress rule is empty")
 		}
 
 		var locations []config.Location
@@ -200,9 +226,15 @@ func (cnf *Configurator) generateNginxCfg(ingEx *IngressEx, pems map[string]stri
 
 func (cnf *Configurator) createConfig(ingEx *IngressEx) config.Config {
 	ingCfg := *cnf.config
+	ing := ingEx.Ingress
 	if serverTokens, exists, err := GetMapKeyAsBool(ingEx.Ingress.Annotations, "nginx.org/server-tokens", ingEx.Ingress); exists {
 		if err != nil {
-			glog.Error(err)
+			log.
+				WithField("namespace", ing.Namespace).
+				WithField("name", ing.Name).
+				WithField("annotation", "nginx.org/server-tokens").
+				WithError(err).
+				Error("Error parsing ingress annotation, skipping")
 		} else {
 			ingCfg.ServerTokens = serverTokens
 		}
@@ -210,14 +242,24 @@ func (cnf *Configurator) createConfig(ingEx *IngressEx) config.Config {
 
 	if serverSnippets, exists, err := GetMapKeyAsStringSlice(ingEx.Ingress.Annotations, "nginx.org/server-snippets", ingEx.Ingress, "\n"); exists {
 		if err != nil {
-			glog.Error(err)
+			log.
+				WithField("namespace", ing.Namespace).
+				WithField("name", ing.Name).
+				WithField("annotation", "nginx.org/server-snippets").
+				WithError(err).
+				Error("Error parsing ingress annotation, skipping")
 		} else {
 			ingCfg.ServerSnippets = serverSnippets
 		}
 	}
 	if locationSnippets, exists, err := GetMapKeyAsStringSlice(ingEx.Ingress.Annotations, "nginx.org/location-snippets", ingEx.Ingress, "\n"); exists {
 		if err != nil {
-			glog.Error(err)
+			log.
+				WithField("namespace", ing.Namespace).
+				WithField("name", ing.Name).
+				WithField("annotation", "nginx.org/location-snippets").
+				WithError(err).
+				Error("Error parsing ingress annotation, skipping")
 		} else {
 			ingCfg.LocationSnippets = locationSnippets
 		}
@@ -231,14 +273,24 @@ func (cnf *Configurator) createConfig(ingEx *IngressEx) config.Config {
 	}
 	if proxyHideHeaders, exists, err := GetMapKeyAsStringSlice(ingEx.Ingress.Annotations, "nginx.org/proxy-hide-headers", ingEx.Ingress, ","); exists {
 		if err != nil {
-			glog.Error(err)
+			log.
+				WithField("namespace", ing.Namespace).
+				WithField("name", ing.Name).
+				WithField("annotation", "nginx.org/proxy-hide-headers").
+				WithError(err).
+				Error("Error parsing ingress annotation, skipping")
 		} else {
 			ingCfg.ProxyHideHeaders = proxyHideHeaders
 		}
 	}
 	if proxyPassHeaders, exists, err := GetMapKeyAsStringSlice(ingEx.Ingress.Annotations, "nginx.org/proxy-pass-headers", ingEx.Ingress, ","); exists {
 		if err != nil {
-			glog.Error(err)
+			log.
+				WithField("namespace", ing.Namespace).
+				WithField("name", ing.Name).
+				WithField("annotation", "nginx.org/proxy-pass-headers").
+				WithError(err).
+				Error("Error parsing ingress annotation, skipping")
 		} else {
 			ingCfg.ProxyPassHeaders = proxyPassHeaders
 		}
@@ -248,21 +300,36 @@ func (cnf *Configurator) createConfig(ingEx *IngressEx) config.Config {
 	}
 	if HTTP2, exists, err := GetMapKeyAsBool(ingEx.Ingress.Annotations, "nginx.org/http2", ingEx.Ingress); exists {
 		if err != nil {
-			glog.Error(err)
+			log.
+				WithField("namespace", ing.Namespace).
+				WithField("name", ing.Name).
+				WithField("annotation", "nginx.org/http2").
+				WithError(err).
+				Error("Error parsing ingress annotation, skipping")
 		} else {
 			ingCfg.HTTP2 = HTTP2
 		}
 	}
 	if redirectToHTTPS, exists, err := GetMapKeyAsBool(ingEx.Ingress.Annotations, "nginx.org/redirect-to-https", ingEx.Ingress); exists {
 		if err != nil {
-			glog.Error(err)
+			log.
+				WithField("namespace", ing.Namespace).
+				WithField("name", ing.Name).
+				WithField("annotation", "nginx.org/redirect-to-https").
+				WithError(err).
+				Error("Error parsing ingress annotation, skipping")
 		} else {
 			ingCfg.RedirectToHTTPS = redirectToHTTPS
 		}
 	}
 	if proxyBuffering, exists, err := GetMapKeyAsBool(ingEx.Ingress.Annotations, "nginx.org/proxy-buffering", ingEx.Ingress); exists {
 		if err != nil {
-			glog.Error(err)
+			log.
+				WithField("namespace", ing.Namespace).
+				WithField("name", ing.Name).
+				WithField("annotation", "nginx.org/proxy-buffering").
+				WithError(err).
+				Error("Error parsing ingress annotation, skipping")
 		} else {
 			ingCfg.ProxyBuffering = proxyBuffering
 		}
@@ -270,23 +337,43 @@ func (cnf *Configurator) createConfig(ingEx *IngressEx) config.Config {
 
 	if hsts, exists, err := GetMapKeyAsBool(ingEx.Ingress.Annotations, "nginx.org/hsts", ingEx.Ingress); exists {
 		if err != nil {
-			glog.Error(err)
+			log.
+				WithField("namespace", ing.Namespace).
+				WithField("name", ing.Name).
+				WithField("annotation", "nginx.org/hsts").
+				WithError(err).
+				Error("Error parsing ingress annotation, skipping")
 		} else {
 			parsingErrors := false
 
 			hstsMaxAge, existsMA, err := GetMapKeyAsInt(ingEx.Ingress.Annotations, "nginx.org/hsts-max-age", ingEx.Ingress)
 			if existsMA && err != nil {
-				glog.Error(err)
+				log.
+					WithField("namespace", ing.Namespace).
+					WithField("name", ing.Name).
+					WithField("annotation", "nginx.org/hsts-max-age").
+					WithError(err).
+					Error("Error parsing ingress annotation, skipping")
 				parsingErrors = true
 			}
 			hstsIncludeSubdomains, existsIS, err := GetMapKeyAsBool(ingEx.Ingress.Annotations, "nginx.org/hsts-include-subdomains", ingEx.Ingress)
 			if existsIS && err != nil {
-				glog.Error(err)
+				log.
+					WithField("namespace", ing.Namespace).
+					WithField("name", ing.Name).
+					WithField("annotation", "nginx.org/hsts-include-subdomains").
+					WithError(err).
+					Error("Error parsing ingress annotation, skipping")
 				parsingErrors = true
 			}
 
 			if parsingErrors {
-				glog.Errorf("Ingress %s/%s: There are configuration issues with hsts annotations, skipping annotions for all hsts settings", ingEx.Ingress.GetNamespace(), ingEx.Ingress.GetName())
+				log.
+					WithField("namespace", ing.Namespace).
+					WithField("name", ing.Name).
+					WithField("annotation", "hsts").
+					WithError(err).
+					Error("Error parsing hsts ingress annotations, skipping all hsts annotations")
 			} else {
 				ingCfg.HSTS = hsts
 				if existsMA {
@@ -323,20 +410,20 @@ func getWebsocketServices(ingEx *IngressEx) map[string]bool {
 	return wsServices
 }
 
-func getRewrites(ingEx *IngressEx) map[string]string {
-	rewrites := make(map[string]string)
+func getRewrites(ingEx *IngressEx) (rewrites map[string]string, err error) {
+	rewrites = make(map[string]string)
 
 	if services, exists := ingEx.Ingress.Annotations["nginx.org/rewrites"]; exists {
 		for _, svc := range strings.Split(services, ";") {
-			if serviceName, rewrite, err := parseRewrites(svc); err != nil {
-				glog.Errorf("In %v nginx.org/rewrites contains invalid declaration: %v, ignoring", ingEx.Ingress.Name, err)
-			} else {
-				rewrites[serviceName] = rewrite
+			serviceName, rewrite, err := parseRewrites(svc)
+			if err != nil {
+				return rewrites, err
 			}
+			rewrites[serviceName] = rewrite
 		}
 	}
 
-	return rewrites
+	return
 }
 
 func parseRewrites(service string) (serviceName string, rewrite string, err error) {
@@ -440,7 +527,7 @@ func (cnf *Configurator) DeleteIngress(name string) {
 
 	cnf.nginx.DeleteIngress(name)
 	if err := cnf.nginx.Reload(); err != nil {
-		glog.Errorf("Error when removing ingress %q: %q", name, err)
+		log.Errorf("Error when removing ingress %q: %q", name, err)
 	}
 }
 
