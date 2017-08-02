@@ -41,3 +41,15 @@ func (e *shellExecutor) Exec(shellCommand string) error {
 	}
 	return nil
 }
+
+// NewLogExecutor just logs commands
+func NewLogExecutor() Executor {
+	return &shellExecutor{}
+}
+
+type logExecutor struct{}
+
+func (e *logExecutor) Exec(shellCommand string) error {
+	log.WithField("cmd", shellCommand).Info("executing shell command")
+	return nil
+}

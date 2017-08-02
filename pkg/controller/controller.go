@@ -22,16 +22,19 @@ import (
 	"strings"
 	"time"
 
+	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/agent"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/nginx"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/record"
 
 	log "github.com/sirupsen/logrus"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	core_v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	api_v1 "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
@@ -54,25 +57,35 @@ type LoadBalancerController struct {
 	endpLister           StoreToEndpointLister
 	cfgmLister           StoreToConfigMapLister
 	ingQueue             TaskQueue
-	endpQueue            TaskQueue
 	cfgmQueue            TaskQueue
+	nginx                agent.Nginx
 	stopCh               chan struct{}
-	cnf                  *nginx.Configurator
 	watchNginxConfigMaps bool
+
+	configurator Configurator
 }
 
 var keyFunc = cache.DeletionHandlingMetaNamespaceKeyFunc
 
 // NewLoadBalancerController creates a controller
-func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod time.Duration, namespace string, cnf *nginx.Configurator, nginxConfigMaps string) (*LoadBalancerController, error) {
+func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod time.Duration, namespace string, nginxConfigMaps string) (*LoadBalancerController, error) {
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartRecordingToSink(&core_v1.EventSinkImpl{
+		Interface: kubeClient.Core().Events(""),
+	})
 	lbc := LoadBalancerController{
 		client: kubeClient,
 		stopCh: make(chan struct{}),
-		cnf:    cnf,
+		nginx:  agent.NewNginx(nil),
 	}
 
+	lbc.configurator = NewConfigurator(
+		&IngressExStoreFunc{lbc.getIngressEx},
+		eventBroadcaster.NewRecorder(scheme.Scheme, api_v1.EventSource{Component: "ingress-controller"}),
+		lbc.nginx,
+	)
+
 	lbc.ingQueue = NewTaskQueue(lbc.syncIng)
-	lbc.endpQueue = NewTaskQueue(lbc.syncEndp)
 
 	ingHandlers := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -87,7 +100,7 @@ func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod tim
 			log.
 				WithField("namespace", addIng.Namespace).
 				WithField("name", addIng.Name).
-				Info("Adding Ingress")
+				Debug("Adding Ingress")
 			lbc.ingQueue.Enqueue(obj)
 		},
 		DeleteFunc: func(obj interface{}) {
@@ -114,7 +127,7 @@ func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod tim
 			log.
 				WithField("namespace", remIng.Namespace).
 				WithField("name", remIng.Name).
-				Info("Removing ingress")
+				Debug("Removing ingress")
 			lbc.ingQueue.Enqueue(obj)
 		},
 		UpdateFunc: func(old, cur interface{}) {
@@ -126,7 +139,7 @@ func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod tim
 				log.
 					WithField("namespace", curIng.Namespace).
 					WithField("name", curIng.Name).
-					Info("Ingress changed, syncing")
+					Debug("Ingress changed, syncing")
 				lbc.ingQueue.Enqueue(cur)
 			}
 		},
@@ -141,7 +154,7 @@ func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod tim
 			log.
 				WithField("namespace", addSvc.Namespace).
 				WithField("name", addSvc.Name).
-				Info("Adding service")
+				Debug("Adding service")
 			lbc.enqueueIngressForService(addSvc)
 		},
 		DeleteFunc: func(obj interface{}) {
@@ -165,7 +178,7 @@ func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod tim
 			log.
 				WithField("namespace", remSvc.Namespace).
 				WithField("name", remSvc.Name).
-				Info("Removing service")
+				Debug("Removing service")
 			lbc.enqueueIngressForService(remSvc)
 		},
 		UpdateFunc: func(old, cur interface{}) {
@@ -174,7 +187,7 @@ func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod tim
 				log.
 					WithField("namespace", updateSvc.Namespace).
 					WithField("name", updateSvc.Name).
-					Info("Service changed, syncing")
+					Debug("Service changed, syncing")
 				lbc.enqueueIngressForService(cur.(*api_v1.Service))
 			}
 		},
@@ -189,8 +202,8 @@ func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod tim
 			log.
 				WithField("namespace", addEndp.Namespace).
 				WithField("name", addEndp.Name).
-				Info("Adding endpoints")
-			lbc.endpQueue.Enqueue(obj)
+				Debug("Adding endpoints")
+			lbc.enqueueIngressForEndpoints(addEndp)
 		},
 		DeleteFunc: func(obj interface{}) {
 			remEndp, isEndp := obj.(*api_v1.Endpoints)
@@ -213,8 +226,8 @@ func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod tim
 			log.
 				WithField("namespace", remEndp.Namespace).
 				WithField("name", remEndp.Name).
-				Info("Removing endpoints")
-			lbc.endpQueue.Enqueue(obj)
+				Debug("Removing endpoints")
+			lbc.enqueueIngressForEndpoints(remEndp)
 		},
 		UpdateFunc: func(old, cur interface{}) {
 			if !reflect.DeepEqual(old, cur) {
@@ -222,8 +235,8 @@ func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod tim
 				log.
 					WithField("namespace", endp.Namespace).
 					WithField("name", endp.Name).
-					Info("Endpoints changed, syncing")
-				lbc.endpQueue.Enqueue(cur)
+					Debug("Endpoints changed, syncing")
+				lbc.enqueueIngressForEndpoints(endp)
 			}
 		},
 	}
@@ -246,7 +259,7 @@ func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod tim
 						log.
 							WithField("namespace", cfgm.Namespace).
 							WithField("name", cfgm.Name).
-							Info("Adding ConfigMap")
+							Debug("Adding ConfigMap")
 						lbc.cfgmQueue.Enqueue(obj)
 					}
 				},
@@ -272,7 +285,7 @@ func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod tim
 						log.
 							WithField("namespace", cfgm.Namespace).
 							WithField("name", cfgm.Name).
-							Info("Removing ConfigMap")
+							Debug("Removing ConfigMap")
 						lbc.cfgmQueue.Enqueue(obj)
 					}
 				},
@@ -283,7 +296,7 @@ func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod tim
 							log.
 								WithField("namespace", cfgm.Namespace).
 								WithField("name", cfgm.Name).
-								Info("ConfigMap changed, syncing")
+								Debug("ConfigMap changed, syncing")
 							lbc.cfgmQueue.Enqueue(cur)
 						}
 					}
@@ -298,58 +311,30 @@ func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod tim
 	return &lbc, nil
 }
 
+// Stop stops the loadbalancer controller
+func (lbc *LoadBalancerController) Stop() {
+	log.Info("Stopping gracefully")
+	close(lbc.stopCh)
+}
+
 // Run starts the loadbalancer controller
 func (lbc *LoadBalancerController) Run() {
 	go lbc.ingController.Run(lbc.stopCh)
 	go lbc.svcController.Run(lbc.stopCh)
 	go lbc.endpController.Run(lbc.stopCh)
 	go lbc.ingQueue.Run(time.Second, lbc.stopCh)
-	go lbc.endpQueue.Run(time.Second, lbc.stopCh)
 	if lbc.watchNginxConfigMaps {
 		go lbc.cfgmController.Run(lbc.stopCh)
 		go lbc.cfgmQueue.Run(time.Second, lbc.stopCh)
 	}
-	<-lbc.stopCh
-}
-
-func (lbc *LoadBalancerController) syncEndp(key string) {
-	nn := strings.SplitN(key, "/", 2)
-	log.
-		WithField("namespace", nn[0]).
-		WithField("name", nn[1]).
-		Info("Syncing endpoints")
-
-	obj, endpExists, err := lbc.endpLister.GetByKey(key)
-	if err != nil {
-		lbc.endpQueue.Requeue(key, err)
-		return
-	}
-
-	if endpExists {
-		ings := lbc.getIngressForEndpoints(obj)
-
-		for _, ing := range ings {
-			if !isNginxIngress(&ing) {
-				continue
-			}
-			ingEx, err := lbc.createIngress(&ing)
-			if err != nil {
-				log.
-					WithField("namespace", ing.Namespace).
-					WithField("name", ing.Name).
-					Info("Error updating endpoints for Ingress")
-				continue
-			}
-
-			log.
-				WithField("namespace", ing.Namespace).
-				WithField("name", ing.Name).
-				Info("Updating Endpoints for Ingress")
-			name := ing.Namespace + "-" + ing.Name
-			lbc.cnf.UpdateEndpoints(name, ingEx)
+	go func() {
+		err := lbc.nginx.Run()
+		if err != nil {
+			log.WithError(err).Fatal("Nginx process exited with error")
 		}
-	}
-
+	}()
+	<-lbc.stopCh
+	lbc.nginx.Stop()
 }
 
 func (lbc *LoadBalancerController) syncCfgm(key string) {
@@ -357,286 +342,24 @@ func (lbc *LoadBalancerController) syncCfgm(key string) {
 	log.
 		WithField("namespace", nn[0]).
 		WithField("name", nn[1]).
-		Info("Syncing configmap")
+		Debug("Syncing configmap")
 
 	obj, cfgmExists, err := lbc.cfgmLister.GetByKey(key)
 	if err != nil {
 		lbc.cfgmQueue.Requeue(key, err)
 		return
 	}
-	cfg := config.NewDefaultConfig()
 
-	if cfgmExists {
-		cfgm := obj.(*api_v1.ConfigMap)
-
-		if serverTokens, exists, err := nginx.GetMapKeyAsBool(cfgm.Data, "server-tokens", cfgm); exists {
-			if err != nil {
-				log.
-					WithField("namespace", cfgm.Namespace).
-					WithField("name", cfgm.Name).
-					WithField("key", "server-tokens").
-					WithError(err).
-					Error("Error parsing ConfigMap, skipping key")
-			} else {
-				cfg.ServerTokens = serverTokens
-			}
-		}
-
-		if proxyConnectTimeout, exists := cfgm.Data["proxy-connect-timeout"]; exists {
-			cfg.ProxyConnectTimeout = proxyConnectTimeout
-		}
-		if proxyReadTimeout, exists := cfgm.Data["proxy-read-timeout"]; exists {
-			cfg.ProxyReadTimeout = proxyReadTimeout
-		}
-		if proxyHideHeaders, exists, err := nginx.GetMapKeyAsStringSlice(cfgm.Data, "proxy-hide-headers", cfgm, ","); exists {
-			if err != nil {
-				log.
-					WithField("namespace", cfgm.Namespace).
-					WithField("name", cfgm.Name).
-					WithField("key", "proxy-hide-headers").
-					WithError(err).
-					Error("Error parsing ConfigMap, skipping key")
-			} else {
-				cfg.ProxyHideHeaders = proxyHideHeaders
-			}
-		}
-		if proxyPassHeaders, exists, err := nginx.GetMapKeyAsStringSlice(cfgm.Data, "proxy-pass-headers", cfgm, ","); exists {
-			if err != nil {
-				log.
-					WithField("namespace", cfgm.Namespace).
-					WithField("name", cfgm.Name).
-					WithField("key", "proxy-pass-headers").
-					WithError(err).
-					Error("Error validating ConfigMap, skipping key")
-			} else {
-				cfg.ProxyPassHeaders = proxyPassHeaders
-			}
-		}
-		if clientMaxBodySize, exists := cfgm.Data["client-max-body-size"]; exists {
-			cfg.ClientMaxBodySize = clientMaxBodySize
-		}
-		if serverNamesHashBucketSize, exists := cfgm.Data["server-names-hash-bucket-size"]; exists {
-			cfg.MainServerNamesHashBucketSize = serverNamesHashBucketSize
-		}
-		if serverNamesHashMaxSize, exists := cfgm.Data["server-names-hash-max-size"]; exists {
-			cfg.MainServerNamesHashMaxSize = serverNamesHashMaxSize
-		}
-		if HTTP2, exists, err := nginx.GetMapKeyAsBool(cfgm.Data, "http2", cfgm); exists {
-			if err != nil {
-				log.
-					WithField("namespace", cfgm.Namespace).
-					WithField("name", cfgm.Name).
-					WithField("key", "http2").
-					WithError(err).
-					Error("Error validating ConfigMap, skipping key")
-			} else {
-				cfg.HTTP2 = HTTP2
-			}
-		}
-		if redirectToHTTPS, exists, err := nginx.GetMapKeyAsBool(cfgm.Data, "redirect-to-https", cfgm); exists {
-			if err != nil {
-				log.
-					WithField("namespace", cfgm.Namespace).
-					WithField("name", cfgm.Name).
-					WithField("key", "redirect-to-https").
-					WithError(err).
-					Error("Error validating ConfigMap, skipping key")
-			} else {
-				cfg.RedirectToHTTPS = redirectToHTTPS
-			}
-		}
-
-		// HSTS block
-		if hsts, exists, err := nginx.GetMapKeyAsBool(cfgm.Data, "hsts", cfgm); exists {
-			if err != nil {
-				log.
-					WithField("namespace", cfgm.Namespace).
-					WithField("name", cfgm.Name).
-					WithField("key", "hsts").
-					WithError(err).
-					Error("Error validating ConfigMap, skipping key")
-			} else {
-				parsingErrors := false
-
-				hstsMaxAge, existsMA, err := nginx.GetMapKeyAsInt(cfgm.Data, "hsts-max-age", cfgm)
-				if existsMA && err != nil {
-					log.
-						WithField("namespace", cfgm.Namespace).
-						WithField("name", cfgm.Name).
-						WithField("key", "hsts-max-age").
-						WithError(err).
-						Error("Error validating ConfigMap, skipping key")
-					parsingErrors = true
-				}
-				hstsIncludeSubdomains, existsIS, err := nginx.GetMapKeyAsBool(cfgm.Data, "hsts-include-subdomains", cfgm)
-				if existsIS && err != nil {
-					log.
-						WithField("namespace", cfgm.Namespace).
-						WithField("name", cfgm.Name).
-						WithField("key", "hsts-include-subdomains").
-						WithError(err).
-						Error("Error validating ConfigMap, skipping key")
-					parsingErrors = true
-				}
-
-				if parsingErrors {
-					log.
-						WithField("namespace", cfgm.Namespace).
-						WithField("name", cfgm.Name).
-						WithError(err).
-						Error("Error validating HSTS settings in ConfigMap, skipping keys for all hsts settings")
-				} else {
-					cfg.HSTS = hsts
-					if existsMA {
-						cfg.HSTSMaxAge = hstsMaxAge
-					}
-					if existsIS {
-						cfg.HSTSIncludeSubdomains = hstsIncludeSubdomains
-					}
-				}
-			}
-		}
-
-		if proxyProtocol, exists, err := nginx.GetMapKeyAsBool(cfgm.Data, "proxy-protocol", cfgm); exists {
-			if err != nil {
-				log.
-					WithField("namespace", cfgm.Namespace).
-					WithField("name", cfgm.Name).
-					WithField("key", "proxy-protocol").
-					WithError(err).
-					Error("Error validating ConfigMap, skipping key")
-			} else {
-				cfg.ProxyProtocol = proxyProtocol
-			}
-		}
-
-		// ngx_http_realip_module
-		if realIPHeader, exists := cfgm.Data["real-ip-header"]; exists {
-			cfg.RealIPHeader = realIPHeader
-		}
-		if setRealIPFrom, exists, err := nginx.GetMapKeyAsStringSlice(cfgm.Data, "set-real-ip-from", cfgm, ","); exists {
-			if err != nil {
-				log.
-					WithField("namespace", cfgm.Namespace).
-					WithField("name", cfgm.Name).
-					WithField("key", "set-real-ip-from").
-					WithError(err).
-					Error("Error validating ConfigMap, skipping key")
-			} else {
-				cfg.SetRealIPFrom = setRealIPFrom
-			}
-		}
-		if realIPRecursive, exists, err := nginx.GetMapKeyAsBool(cfgm.Data, "real-ip-recursive", cfgm); exists {
-			if err != nil {
-				log.
-					WithField("namespace", cfgm.Namespace).
-					WithField("name", cfgm.Name).
-					WithField("key", "real-ip-recursive").
-					WithError(err).
-					Error("Error validating ConfigMap, skipping key")
-			} else {
-				cfg.RealIPRecursive = realIPRecursive
-			}
-		}
-
-		// SSL block
-		if sslProtocols, exists := cfgm.Data["ssl-protocols"]; exists {
-			cfg.MainServerSSLProtocols = sslProtocols
-		}
-		if sslPreferServerCiphers, exists, err := nginx.GetMapKeyAsBool(cfgm.Data, "ssl-prefer-server-ciphers", cfgm); exists {
-			if err != nil {
-				log.
-					WithField("namespace", cfgm.Namespace).
-					WithField("name", cfgm.Name).
-					WithField("key", "ssl-prefer-server-ciphers").
-					WithError(err).
-					Error("Error validating ConfigMap, skipping key")
-			} else {
-				cfg.MainServerSSLPreferServerCiphers = sslPreferServerCiphers
-			}
-		}
-		if sslCiphers, exists := cfgm.Data["ssl-ciphers"]; exists {
-			cfg.MainServerSSLCiphers = strings.Trim(sslCiphers, "\n")
-		}
-		if sslDHParamFile, exists := cfgm.Data["ssl-dhparam-file"]; exists {
-			sslDHParamFile = strings.Trim(sslDHParamFile, "\n")
-			fileName, err := lbc.cnf.AddOrUpdateDHParam(sslDHParamFile)
-			if err != nil {
-				log.
-					WithField("namespace", cfgm.Namespace).
-					WithField("name", cfgm.Name).
-					WithField("key", "ssl-dhparam-file").
-					WithError(err).
-					Error("Error updating dhparams from ConfigMap, skipping key")
-			} else {
-				cfg.MainServerSSLDHParam = fileName
-			}
-		}
-
-		if logFormat, exists := cfgm.Data["log-format"]; exists {
-			cfg.MainLogFormat = logFormat
-		}
-		if proxyBuffering, exists, err := nginx.GetMapKeyAsBool(cfgm.Data, "proxy-buffering", cfgm); exists {
-			if err != nil {
-				log.
-					WithField("namespace", cfgm.Namespace).
-					WithField("name", cfgm.Name).
-					WithField("key", "proxy-buffering").
-					WithError(err).
-					Error("Error validating ConfigMap, skipping key")
-			} else {
-				cfg.ProxyBuffering = proxyBuffering
-			}
-		}
-		if proxyBuffers, exists := cfgm.Data["proxy-buffers"]; exists {
-			cfg.ProxyBuffers = proxyBuffers
-		}
-		if proxyBufferSize, exists := cfgm.Data["proxy-buffer-size"]; exists {
-			cfg.ProxyBufferSize = proxyBufferSize
-		}
-		if proxyMaxTempFileSize, exists := cfgm.Data["proxy-max-temp-file-size"]; exists {
-			cfg.ProxyMaxTempFileSize = proxyMaxTempFileSize
-		}
-
-		if mainHTTPSnippets, exists, err := nginx.GetMapKeyAsStringSlice(cfgm.Data, "http-snippets", cfgm, "\n"); exists {
-			if err != nil {
-				log.
-					WithField("namespace", cfgm.Namespace).
-					WithField("name", cfgm.Name).
-					WithField("key", "http-snippets").
-					WithError(err).
-					Error("Error validating ConfigMap, skipping key")
-			} else {
-				cfg.MainHTTPSnippets = mainHTTPSnippets
-			}
-		}
-		if locationSnippets, exists, err := nginx.GetMapKeyAsStringSlice(cfgm.Data, "location-snippets", cfgm, "\n"); exists {
-			if err != nil {
-				log.
-					WithField("namespace", cfgm.Namespace).
-					WithField("name", cfgm.Name).
-					WithField("key", "location-snippets").
-					WithError(err).
-					Error("Error validating ConfigMap, skipping key")
-			} else {
-				cfg.LocationSnippets = locationSnippets
-			}
-		}
-		if serverSnippets, exists, err := nginx.GetMapKeyAsStringSlice(cfgm.Data, "server-snippets", cfgm, "\n"); exists {
-			if err != nil {
-				log.
-					WithField("namespace", cfgm.Namespace).
-					WithField("name", cfgm.Name).
-					WithField("key", "server-snippets").
-					WithError(err).
-					Error("Error validating ConfigMap, skipping key")
-			} else {
-				cfg.ServerSnippets = serverSnippets
-			}
-		}
-
+	if !cfgmExists {
+		return
 	}
-	lbc.cnf.UpdateConfig(cfg)
+
+	// var cfg *config.Config
+	cfgm := obj.(*api_v1.ConfigMap)
+	if err := lbc.configurator.ConfigUpdated(cfgm); err != nil {
+		lbc.cfgmQueue.Requeue(key, err)
+		return
+	}
 
 	ings, _ := lbc.ingLister.List()
 	for _, ing := range ings.Items {
@@ -648,44 +371,55 @@ func (lbc *LoadBalancerController) syncCfgm(key string) {
 }
 
 func (lbc *LoadBalancerController) syncIng(key string) {
-	nn := strings.SplitN(key, "/", 2)
-	log.
-		WithField("namespace", nn[0]).
-		WithField("name", nn[1]).
-		Info("Syncing Ingress")
-
-	obj, ingExists, err := lbc.ingLister.Store.GetByKey(key)
+	_, ingExists, err := lbc.ingLister.Store.GetByKey(key)
 	if err != nil {
 		lbc.ingQueue.Requeue(key, err)
 		return
 	}
 
-	// defaut/some-ingress -> default-some-ingress
-	name := strings.Replace(key, "/", "-", -1)
-
 	if !ingExists {
+		nn := strings.SplitN(key, "/", 2)
 		log.
 			WithField("namespace", nn[0]).
 			WithField("name", nn[1]).
-			Info("Deleting Ingress")
-		lbc.cnf.DeleteIngress(name)
-	} else {
-		log.
-			WithField("namespace", nn[0]).
-			WithField("name", nn[1]).
-			Info("Adding or Updating Ingress")
-		ing := obj.(*extensions.Ingress)
-		ingEx, err := lbc.createIngress(ing)
-		if err != nil {
+			Info("Ingress no longer exists, deleting")
+		if err := lbc.configurator.IngressDeleted(key); err != nil {
 			lbc.ingQueue.RequeueAfter(key, err, 5*time.Second)
-			return
 		}
-		lbc.cnf.AddOrUpdateIngress(name, ingEx)
+		return
 	}
+
+	if err := lbc.configurator.IngressUpdated(key); err != nil {
+		lbc.ingQueue.RequeueAfter(key, err, 5*time.Second)
+		return
+	}
+}
+
+func (lbc *LoadBalancerController) getIngressEx(ingKey string) (*config.IngressEx, error) {
+	obj, ingExists, err := lbc.ingLister.Store.GetByKey(ingKey)
+	if err != nil {
+		return nil, err
+	}
+	if !ingExists {
+		return nil, nil
+	}
+
+	ing := obj.(*extensions.Ingress)
+	return lbc.createIngress(ing)
 }
 
 func (lbc *LoadBalancerController) enqueueIngressForService(svc *api_v1.Service) {
 	ings := lbc.getIngressesForService(svc)
+	for _, ing := range ings {
+		if !isNginxIngress(&ing) {
+			continue
+		}
+		lbc.ingQueue.Enqueue(&ing)
+	}
+}
+
+func (lbc *LoadBalancerController) enqueueIngressForEndpoints(endp *api_v1.Endpoints) {
+	ings := lbc.getIngressForEndpoints(endp)
 	for _, ing := range ings {
 		if !isNginxIngress(&ing) {
 			continue
@@ -701,7 +435,7 @@ func (lbc *LoadBalancerController) getIngressesForService(svc *api_v1.Service) [
 			WithField("namespace", svc.Namespace).
 			WithField("name", svc.Name).
 			WithError(err).
-			Info("Ignoring Service")
+			Debug("Ignoring Service")
 		return nil
 	}
 	return ings
@@ -726,19 +460,19 @@ func (lbc *LoadBalancerController) getIngressForEndpoints(obj interface{}) []ext
 	return ings
 }
 
-func (lbc *LoadBalancerController) createIngress(ing *extensions.Ingress) (*nginx.IngressEx, error) {
-	ingEx := &nginx.IngressEx{
+func (lbc *LoadBalancerController) createIngress(ing *extensions.Ingress) (*config.IngressEx, error) {
+	ingEx := &config.IngressEx{
 		Ingress: ing,
 	}
 
-	ingEx.Secrets = make(map[string]*api_v1.Secret)
+	secrets := map[string]*api_v1.Secret{}
 	for _, tls := range ing.Spec.TLS {
 		secretName := tls.SecretName
 		secret, err := lbc.client.Core().Secrets(ing.Namespace).Get(secretName, meta_v1.GetOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("Error retrieving secret %v for Ingress %v: %v", secretName, ing.Name, err)
 		}
-		ingEx.Secrets[secretName] = secret
+		secrets[secretName] = secret
 	}
 
 	ingEx.Endpoints = make(map[string][]string)
@@ -773,6 +507,19 @@ func (lbc *LoadBalancerController) createIngress(ing *extensions.Ingress) (*ngin
 			}
 		}
 	}
+
+	ingEx.Secrets = secrets
+
+	// certificates := map[string]*config.CertificatePair{}
+	// for host, secret := range secrets {
+	// 	s, errs := lbc.secretParser.Parse(secret)
+	// 	for _, err := range errs {
+	// 		lbc.recorder.Event(secret, api_v1.EventTypeWarning, "Config Error", err.Error())
+	// 	}
+	// 	if len(errs) == 0 {
+	// 		certificates[host] = s
+	// 	}
+	// }
 
 	return ingEx, nil
 }

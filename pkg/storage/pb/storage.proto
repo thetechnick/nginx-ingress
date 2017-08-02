@@ -1,0 +1,19 @@
+syntax = "proto3";
+package pb;
+
+message ServerConfig {
+  string name = 1;
+  bytes config = 2;
+  TLSCertificate tls = 3;
+  map<string, string> meta = 4;
+}
+
+message TLSCertificate {
+  string name = 1;
+  bytes content = 2;
+}
+
+message MainConfig {
+  bytes config = 1;
+  bytes dhparam = 2;
+}

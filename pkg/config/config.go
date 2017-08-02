@@ -1,5 +1,16 @@
 package config
 
+import (
+	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/pb"
+	api_v1 "k8s.io/client-go/pkg/api/v1"
+	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	"k8s.io/client-go/tools/cache"
+)
+
+// KeyFunc is used to get the k8s object key,
+// which identifies an object
+var KeyFunc = cache.DeletionHandlingMetaNamespaceKeyFunc
+
 // Config holds NGINX configuration parameters
 type Config struct {
 	LocationSnippets              []string
@@ -35,6 +46,7 @@ type Config struct {
 	MainServerSSLPreferServerCiphers bool
 	MainServerSSLCiphers             string
 	MainServerSSLDHParam             string
+	MainServerSSLDHParamFile         string
 }
 
 // NewDefaultConfig creates a Config with default values
@@ -54,6 +66,16 @@ func NewDefaultConfig() *Config {
 type Upstream struct {
 	Name            string
 	UpstreamServers []UpstreamServer
+}
+
+// NewUpstreamWithDefaultServer creates an upstream with the default server.
+// proxy_pass to an upstream with the default server returns 502.
+// We use it for services that have no endpoints
+func NewUpstreamWithDefaultServer(name string) Upstream {
+	return Upstream{
+		Name:            name,
+		UpstreamServers: []UpstreamServer{UpstreamServer{Address: "127.0.0.1", Port: "8181"}},
+	}
 }
 
 // UpstreamServer describes a server in an NGINX upstream
@@ -85,6 +107,8 @@ type Server struct {
 	RealIPHeader    string
 	SetRealIPFrom   []string
 	RealIPRecursive bool
+
+	TLSCertificateFile *pb.TLSCertificate
 }
 
 // Location describes an NGINX location
@@ -104,6 +128,35 @@ type Location struct {
 	ProxyMaxTempFileSize string
 }
 
+// IngressEx holds an Ingress along with Endpoints of the services
+// that are referenced in this Ingress
+type IngressEx struct {
+	Ingress   *extensions.Ingress
+	Endpoints map[string][]string       // indexed by service Name + port
+	Secrets   map[string]*api_v1.Secret // indexed by secret name
+}
+
+// CreateLocation creates a new location from the given params
+func CreateLocation(path string, upstream Upstream, cfg *Config, websocket bool, rewrite string, ssl bool) Location {
+	loc := Location{
+		Path:                 path,
+		Upstream:             upstream,
+		ProxyConnectTimeout:  cfg.ProxyConnectTimeout,
+		ProxyReadTimeout:     cfg.ProxyReadTimeout,
+		ClientMaxBodySize:    cfg.ClientMaxBodySize,
+		Websocket:            websocket,
+		Rewrite:              rewrite,
+		SSL:                  ssl,
+		ProxyBuffering:       cfg.ProxyBuffering,
+		ProxyBuffers:         cfg.ProxyBuffers,
+		ProxyBufferSize:      cfg.ProxyBufferSize,
+		ProxyMaxTempFileSize: cfg.ProxyMaxTempFileSize,
+		LocationSnippets:     cfg.LocationSnippets,
+	}
+
+	return loc
+}
+
 // MainConfig describe the main NGINX configuration file
 type MainConfig struct {
 	ServerNamesHashBucketSize string
@@ -116,4 +169,10 @@ type MainConfig struct {
 	SSLPreferServerCiphers bool
 	SSLCiphers             string
 	SSLDHParam             string
+}
+
+// CertificatePair describes a key and certificate pair
+type CertificatePair struct {
+	Key         []byte
+	Certificate []byte
 }

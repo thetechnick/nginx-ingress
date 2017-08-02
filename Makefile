@@ -6,15 +6,30 @@ LD_FLAGS="-w -X $(REPO)/pkg/version.Version=$(VERSION)"
 
 all: build
 
-build: clean bin/nginx-ingress
+build: clean bin/nginx-ingress bin/agent
 
 bin/%:
-	@go build -o bin/$* -v -ldflags $(LD_FLAGS) $(REPO)
+	@go build -o bin/$* -v -ldflags $(LD_FLAGS) $(REPO)/cmd/$*
 
 test:
-	@./scripts/test
+	@TEST_FLAGS="-short" ./scripts/test
+
+test-all:
+	./scripts/test
 
 clean:
-	@rm -rf bin
+	@rm -rf bin/nginx-ingress
+	@rm -rf bin/agent
 
-.PHONY: all build clean test
+tools: bin/protoc bin/protoc-gen-go
+
+codegen: tools
+	@./scripts/codegen
+
+bin/protoc:
+	@./scripts/get-protoc
+
+bin/protoc-gen-go:
+	@go build -o bin/protoc-gen-go $(REPO)/vendor/github.com/golang/protobuf/protoc-gen-go
+
+.PHONY: all clean codegen tools test build test-all

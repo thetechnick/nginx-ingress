@@ -49,7 +49,7 @@ func (t *taskQueue) Enqueue(obj interface{}) {
 		log.
 			WithField("obj", obj).
 			WithError(err).
-			Info("Couldn't get key for object, skipping")
+			Error("Couldn't get key for object, skipping")
 		return
 	}
 	t.queue.Add(key)
@@ -87,7 +87,7 @@ func (t *taskQueue) worker() {
 			close(t.workerDone)
 			return
 		}
-		log.WithField("key", key).Info("Syncing")
+		log.WithField("key", key).Debug("Syncing form taskQueue")
 		t.sync(key.(string))
 		t.queue.Done(key)
 	}

@@ -2,10 +2,11 @@
 
 set -eu
 
+TEST_FLAGS=${TEST_FLAGS:-""}
 PKGS=$(go list ./... | grep -v /vendor)
 FORMATTABLE="$(ls -d */ | grep -v vendor/)"
 
-LINT_EXCLUDE='(/vendor|pb$)'
+LINT_EXCLUDE='(/vendor|pb|/test$)'
 LINTABLE=$(go list ./... | grep -v -E $LINT_EXCLUDE)
 
 # go test $PKGS -cover
@@ -21,7 +22,7 @@ generate_cover_data() {
 
     for pkg in "$@"; do
         f="$workdir/$(echo $pkg | tr / -).cover"
-        go test -covermode="$mode" -coverprofile="$f" "$pkg"
+        go test $TEST_FLAGS -covermode="$mode" -coverprofile="$f" "$pkg"
     done
 
     echo "mode: $mode" >"$profile"

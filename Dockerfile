@@ -5,7 +5,7 @@ FROM nginx:1.13.3-alpine
 RUN ln -sf /proc/1/fd/1 /var/log/nginx/access.log \
 	&& ln -sf /proc/1/fd/2 /var/log/nginx/error.log
 
-COPY bin/nginx-ingress pkg/nginx/ingress.tmpl pkg/nginx/nginx.conf.tmpl /
+COPY bin/nginx-ingress pkg/controller/ingress.tmpl pkg/controller/nginx.conf.tmpl /
 
 RUN rm /etc/nginx/conf.d/* && mkdir /etc/nginx/ssl
 
