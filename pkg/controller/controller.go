@@ -767,7 +767,7 @@ func (lbc *LoadBalancerController) createIngress(ing *extensions.Ingress) (*ngin
 					WithField("namespace", ing.Namespace).
 					WithField("name", ing.Name).
 					WithError(err).
-					Errorf("Error retrieving endpoints for ingress backend: %v", ing.Spec.Backend.ServiceName)
+					Errorf("Error retrieving endpoints for ingress backend: %v", path.Backend.ServiceName)
 			} else {
 				ingEx.Endpoints[path.Backend.ServiceName+path.Backend.ServicePort.String()] = endps
 			}
