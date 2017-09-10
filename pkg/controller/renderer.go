@@ -67,9 +67,6 @@ func (c *renderer) RenderMainConfig(controllerConfig *config.Config) (*pb.MainCo
 }
 
 func (c *renderer) RenderServerConfig(mergedConfig *collision.MergedIngressConfig) (*pb.ServerConfig, error) {
-	if mergedConfig.Server.Name == "charts.thetechnick.ninja" {
-		log.Warn("SERVER", mergedConfig.Server)
-	}
 	var buffer bytes.Buffer
 	if err := c.serverTemplate.Execute(&buffer, mergedConfig.Server); err != nil {
 		return nil, err

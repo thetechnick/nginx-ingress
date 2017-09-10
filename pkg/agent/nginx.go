@@ -32,7 +32,7 @@ func NewNginx(e shell.Executor) Nginx {
 func (n *nginx) Run() error {
 	n.log.Debug("starting nginx")
 	err := n.executor.Exec("nginx -g 'daemon off;'")
-	n.log.Debug("nginx stopped unexpected")
+	n.log.WithError(err).Debug("nginx stopped")
 	return err
 }
 

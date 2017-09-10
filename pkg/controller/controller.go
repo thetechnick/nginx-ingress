@@ -22,8 +22,8 @@ import (
 	"strings"
 	"time"
 
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/agent"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
+	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -58,7 +58,6 @@ type LoadBalancerController struct {
 	cfgmLister           StoreToConfigMapLister
 	ingQueue             TaskQueue
 	cfgmQueue            TaskQueue
-	nginx                agent.Nginx
 	stopCh               chan struct{}
 	watchNginxConfigMaps bool
 
@@ -68,7 +67,14 @@ type LoadBalancerController struct {
 var keyFunc = cache.DeletionHandlingMetaNamespaceKeyFunc
 
 // NewLoadBalancerController creates a controller
-func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod time.Duration, namespace string, nginxConfigMaps string) (*LoadBalancerController, error) {
+func NewLoadBalancerController(
+	kubeClient kubernetes.Interface,
+	resyncPeriod time.Duration,
+	namespace string,
+	nginxConfigMaps string,
+	mcs storage.MainConfigStorage,
+	scs storage.ServerConfigStorage,
+) (*LoadBalancerController, error) {
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartRecordingToSink(&core_v1.EventSinkImpl{
 		Interface: kubeClient.Core().Events(""),
@@ -76,13 +82,13 @@ func NewLoadBalancerController(kubeClient kubernetes.Interface, resyncPeriod tim
 	lbc := LoadBalancerController{
 		client: kubeClient,
 		stopCh: make(chan struct{}),
-		nginx:  agent.NewNginx(nil),
 	}
 
 	lbc.configurator = NewConfigurator(
 		&IngressExStoreFunc{lbc.getIngressEx},
 		eventBroadcaster.NewRecorder(scheme.Scheme, api_v1.EventSource{Component: "ingress-controller"}),
-		lbc.nginx,
+		mcs,
+		scs,
 	)
 
 	lbc.ingQueue = NewTaskQueue(lbc.syncIng)
@@ -327,14 +333,7 @@ func (lbc *LoadBalancerController) Run() {
 		go lbc.cfgmController.Run(lbc.stopCh)
 		go lbc.cfgmQueue.Run(time.Second, lbc.stopCh)
 	}
-	go func() {
-		err := lbc.nginx.Run()
-		if err != nil {
-			log.WithError(err).Fatal("Nginx process exited with error")
-		}
-	}()
 	<-lbc.stopCh
-	lbc.nginx.Stop()
 }
 
 func (lbc *LoadBalancerController) syncCfgm(key string) {

@@ -1,0 +1,69 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    name: ingress-lbc
+  name: ingress-lbc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: ingress-lbc
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        name: ingress-lbc
+    spec:
+      containers:
+      - args:
+        - -nginx-configmaps=kube-system/nginx-config
+        - -server-mode
+        - -etcd-endpoints=example-etcd-cluster-client:2379
+        image: quay.io/nico_schieder/ingress-lbc:0.5.0-dirty
+        imagePullPolicy: Always
+        name: lbc
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    name: ingress-agent
+  name: ingress-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: ingress-agent
+  strategy:
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: ingress-agent
+    spec:
+      containers:
+      - args:
+        - -etcd-endpoints=example-etcd-cluster-client:2379
+        image: quay.io/nico_schieder/ingress-agent:0.5.0-dirty
+        imagePullPolicy: Always
+        name: agent
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        - containerPort: 443
+          name: https
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          successThreshold: 1
+          tcpSocket:
+            port: 80
+          timeoutSeconds: 1

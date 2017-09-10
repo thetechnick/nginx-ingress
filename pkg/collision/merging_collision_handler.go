@@ -8,12 +8,16 @@ import (
 	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 
-type mergingCollisionHandler struct{}
+type mergingCollisionHandler struct {
+	log *log.Entry
+}
 
 // NewMergingCollisionHandler returns a CollisionHandler
 // which merges the declaration of multiple ingress objects
 func NewMergingCollisionHandler() Handler {
-	return &mergingCollisionHandler{}
+	return &mergingCollisionHandler{
+		log: log.WithField("component", "MergingCollisionHandler"),
+	}
 }
 
 func (m *mergingCollisionHandler) Resolve(mergeList MergeList) (merged []MergedIngressConfig, err error) {
@@ -45,7 +49,7 @@ func (m *mergingCollisionHandler) Resolve(mergeList MergeList) (merged []MergedI
 		}
 	}
 
-	log.WithField("ings", updatedIngressKeys).WithField("hosts", hosts).Warn("Merging configs")
+	m.log.WithField("ings", updatedIngressKeys).WithField("hosts", hosts).Debug("Merging configs")
 
 	for _, host := range hosts {
 		serverConfigs := hostServerConfigMap[host]

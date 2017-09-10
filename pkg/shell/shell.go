@@ -2,6 +2,7 @@ package shell
 
 import (
 	"os/exec"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -44,12 +45,15 @@ func (e *shellExecutor) Exec(shellCommand string) error {
 
 // NewLogExecutor just logs commands
 func NewLogExecutor() Executor {
-	return &shellExecutor{}
+	return &logExecutor{}
 }
 
 type logExecutor struct{}
 
 func (e *logExecutor) Exec(shellCommand string) error {
+	if shellCommand == "nginx -g 'daemon off;'" {
+		time.Sleep(30 * time.Second)
+	}
 	log.WithField("cmd", shellCommand).Info("executing shell command")
 	return nil
 }

@@ -5,12 +5,10 @@ import (
 	"sync"
 
 	log "github.com/sirupsen/logrus"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/agent"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/collision"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/parser"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/local"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/pb"
 	api_v1 "k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/record"
@@ -24,10 +22,15 @@ type Configurator interface {
 }
 
 // NewConfigurator creates a new Configurator instance
-func NewConfigurator(ingExStore IngressExStore, recorder record.EventRecorder, n agent.Nginx) Configurator {
+func NewConfigurator(
+	ingExStore IngressExStore,
+	recorder record.EventRecorder,
+	mcs storage.MainConfigStorage,
+	scs storage.ServerConfigStorage,
+) Configurator {
 	return &configurator{
-		scs:             local.NewServerConfigStorage(n),
-		mcs:             local.NewMainConfigStorage(n),
+		scs:             scs,
+		mcs:             mcs,
 		ingExParser:     parser.NewIngressExParser(),
 		configMapParser: parser.NewConfigMapParser(),
 		ch:              collision.NewMergingCollisionHandler(),

@@ -3,24 +3,44 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
-
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/agent"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/shell"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/local"
 
 	"github.com/coreos/etcd/clientv3"
 	log "github.com/sirupsen/logrus"
+	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/agent"
+	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/local"
+	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/version"
+)
+
+var (
+	endpointsString = flag.String("etcd-endpoints", "localhost:2379",
+		`ETCD endpoints`)
+
+	printVersion = flag.Bool("version", false, "Print version and exit")
+	logLevel     = flag.String("log-level", "info",
+		`Log level can be one of "debug", "info", "warning", "error", "fatal"`)
 )
 
 func main() {
-	endpointsString := flag.String("etcd-endpoints", "localhost:2379",
-		`ETCD endpoints`)
 	flag.Parse()
+	if *printVersion {
+		fmt.Printf("NGINX Ingress controller version: %s\n", version.Version)
+		return
+	}
+
+	level, err := log.ParseLevel(*logLevel)
+	if err != nil {
+		log.WithError(err).Fatal("unable to set log level")
+	}
+	log.SetLevel(level)
+	log.SetOutput(os.Stderr)
 
 	endpoints := strings.Split(*endpointsString, ",")
-
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
 		DialTimeout: 5 * time.Second,
@@ -30,10 +50,35 @@ func main() {
 	}
 	defer cli.Close()
 
-	n := agent.NewNginx(shell.NewLogExecutor())
+	n := agent.NewNginx(nil)
 	scs := local.NewServerConfigStorage(n)
 	mcs := local.NewMainConfigStorage(n)
 	a := agent.NewAgent(cli, scs, mcs)
-	go n.Run()
-	a.Run(context.Background())
+
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, syscall.SIGTERM, syscall.SIGINT)
+
+	nginxStopped := make(chan error, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	log.Infof("Starting NGINX Ingress agent Version %v", version.Version)
+	go a.Run(ctx)
+	go func() {
+		nginxStopped <- n.Run()
+	}()
+
+	select {
+	case err := <-nginxStopped:
+		if err != nil {
+			log.WithError(err).Fatal("NGINX process exited with error")
+		}
+		log.Fatal("NGINX process exited unexpectedly")
+
+	case <-signalCh:
+		log.Info("Received SIGTERM, stopping gracefully")
+		cancel()
+		n.Stop()
+		<-nginxStopped
+	}
 }
