@@ -25,3 +25,4 @@ Session.vim
 .cover
 vendor
 bin
+protoc

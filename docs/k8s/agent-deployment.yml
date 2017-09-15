@@ -60,10 +60,8 @@ spec:
           name: https
           protocol: TCP
         readinessProbe:
-          failureThreshold: 3
-          initialDelaySeconds: 30
-          periodSeconds: 30
-          successThreshold: 1
-          tcpSocket:
-            port: 80
-          timeoutSeconds: 1
+          httpGet:
+            path: /reay
+            port: 9000
+          initialDelaySeconds: 10
+          periodSeconds: 3

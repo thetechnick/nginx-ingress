@@ -16,7 +16,7 @@ type mergingCollisionHandler struct {
 // which merges the declaration of multiple ingress objects
 func NewMergingCollisionHandler() Handler {
 	return &mergingCollisionHandler{
-		log: log.WithField("component", "MergingCollisionHandler"),
+		log: log.WithField("module", "MergingCollisionHandler"),
 	}
 }
 

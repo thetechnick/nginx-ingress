@@ -37,7 +37,7 @@ func NewConfigurator(
 		ingExStore:      ingExStore,
 		configurator:    NewRenderer(),
 		recorder:        recorder,
-		log:             log.WithField("component", "Configurator"),
+		log:             log.WithField("module", "Configurator"),
 	}
 }
 

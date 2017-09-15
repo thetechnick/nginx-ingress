@@ -53,7 +53,10 @@ func main() {
 	n := agent.NewNginx(nil)
 	scs := local.NewServerConfigStorage(n)
 	mcs := local.NewMainConfigStorage(n)
-	a := agent.NewAgent(cli, scs, mcs)
+
+	readyCh := make(chan interface{}, 1)
+	a := agent.NewAgent(cli, scs, mcs, readyCh)
+	statusServer := agent.NewStatusServer(readyCh)
 
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGTERM, syscall.SIGINT)
@@ -64,6 +67,7 @@ func main() {
 
 	log.Infof("Starting NGINX Ingress agent Version %v", version.Version)
 	go a.Run(ctx)
+	go statusServer.Run()
 	go func() {
 		nginxStopped <- n.Run()
 	}()

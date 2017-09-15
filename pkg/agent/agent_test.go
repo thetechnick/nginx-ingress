@@ -52,7 +52,8 @@ func TestAgent(t *testing.T) {
 		}
 		defer cli.Close()
 
-		a := NewAgent(cli, scsMock, mcsMock)
+		readyCh := make(chan interface{}, 1)
+		a := NewAgent(cli, scsMock, mcsMock, readyCh)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		go a.Run(ctx)
@@ -85,7 +86,8 @@ func TestAgent(t *testing.T) {
 		}
 		defer cli.Close()
 
-		a := NewAgent(cli, scsMock, mcsMock)
+		readyCh := make(chan interface{}, 1)
+		a := NewAgent(cli, scsMock, mcsMock, readyCh)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		go a.Run(ctx)
@@ -118,7 +120,8 @@ func TestAgent(t *testing.T) {
 		}
 		defer cli.Close()
 
-		a := NewAgent(cli, scsMock, mcsMock)
+		readyCh := make(chan interface{}, 1)
+		a := NewAgent(cli, scsMock, mcsMock, readyCh)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		go a.Run(ctx)

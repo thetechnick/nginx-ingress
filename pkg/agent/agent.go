@@ -23,11 +23,17 @@ type Agent struct {
 	mainConfigStorage   storage.MainConfigStorage
 	client              *clientv3.Client
 	log                 *log.Entry
+	readyCh             chan interface{}
 }
 
 // NewAgent creates a new Agent instance
-func NewAgent(client *clientv3.Client, scs storage.ServerConfigStorage, mcs storage.MainConfigStorage) *Agent {
-	return &Agent{scs, mcs, client, log.WithField("module", "agent")}
+func NewAgent(
+	client *clientv3.Client,
+	scs storage.ServerConfigStorage,
+	mcs storage.MainConfigStorage,
+	readyCh chan interface{},
+) *Agent {
+	return &Agent{scs, mcs, client, log.WithField("module", "agent"), readyCh}
 }
 
 func (a *Agent) runServerWatcher() {
@@ -161,6 +167,8 @@ func (a *Agent) syncExistingServers() {
 	for _, kv := range resp.Kvs {
 		a.updateServerFromKey(kv)
 	}
+	a.readyCh <- nil
+	close(a.readyCh)
 }
 
 func (a *Agent) syncMainConfig() {
