@@ -37,6 +37,15 @@ func getKeyName(cfg *pb.ServerConfig) string {
 }
 
 func (s *etcdServerStorage) Put(cfg *pb.ServerConfig) error {
+	existingCfg, err := s.Get(cfg.Name)
+	if err != nil {
+		return err
+	}
+	if existingCfg != nil && proto.Equal(existingCfg, cfg) {
+		s.log.WithField("name", cfg.Name).Info("resource is already up to date, skipped")
+		return nil
+	}
+
 	b, err := proto.Marshal(cfg)
 	if err != nil {
 		return err

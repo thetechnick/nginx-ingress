@@ -4,6 +4,7 @@ import (
 	"path"
 	"sync"
 
+	"github.com/gogo/protobuf/proto"
 	log "github.com/sirupsen/logrus"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/agent"
 	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage"
@@ -29,13 +30,22 @@ type localServerStorage struct {
 }
 
 func (s *localServerStorage) Put(cfg *pb.ServerConfig) error {
+	existingCfg, err := s.Get(cfg.Name)
+	if err != nil {
+		return err
+	}
+	if existingCfg != nil && proto.Equal(existingCfg, cfg) {
+		s.log.WithField("name", cfg.Name).Info("resource is already up to date, skipped")
+		return nil
+	}
+
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.log.WithField("key", cfg.Name).WithField("meta", cfg.Meta).Debug("Put")
 	t := s.createTransaction()
 	defer t.Apply()
 
-	err := t.Update(s.getServerConfigFilename(cfg), string(cfg.Config))
+	err = t.Update(s.getServerConfigFilename(cfg), string(cfg.Config))
 	if err != nil {
 		t.Rollback()
 		return err

@@ -61,7 +61,7 @@ spec:
           protocol: TCP
         readinessProbe:
           httpGet:
-            path: /reay
+            path: /ready
             port: 9000
           initialDelaySeconds: 10
           periodSeconds: 3

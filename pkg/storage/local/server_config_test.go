@@ -69,15 +69,23 @@ func TestServerConfigStorage(t *testing.T) {
 		},
 	}
 
-	cm := NewServerConfigStorage(nil).(*localServerStorage)
-	nginxMock := &NginxMock{}
-	transactionMock := &TransactionMock{}
-	cm.createTransaction = func() Transaction {
-		return transactionMock
+	var cm *localServerStorage
+	var nginxMock *NginxMock
+	var transactionMock *TransactionMock
+
+	beforeEach := func() {
+		cm = NewServerConfigStorage(nil).(*localServerStorage)
+
+		nginxMock = &NginxMock{}
+		transactionMock = &TransactionMock{}
+		cm.createTransaction = func() Transaction {
+			return transactionMock
+		}
+		cm.nginx = nginxMock
 	}
-	cm.nginx = nginxMock
 
 	t.Run("Put", func(t *testing.T) {
+		beforeEach()
 		assert := assert.New(t)
 
 		nginxMock.On("Reload").Return(nil)
@@ -86,11 +94,18 @@ func TestServerConfigStorage(t *testing.T) {
 		transactionMock.On("Apply")
 
 		err := cm.Put(exampleServerConfig)
-		if assert.NoError(err) {
+		err2 := cm.Put(exampleServerConfig)
+
+		if assert.NoError(err) && assert.NoError(err2) {
 			nginxMock.AssertCalled(t, "Reload")
+			nginxMock.AssertNumberOfCalls(t, "Reload", 1)
+
 			transactionMock.AssertCalled(t, "Update", "/etc/nginx/conf.d/test.conf", "")
 			transactionMock.AssertCalled(t, "Update", "/etc/nginx/ssl/test.pem", "\n")
+			transactionMock.AssertNumberOfCalls(t, "Update", 2)
+
 			transactionMock.AssertCalled(t, "Apply")
+			transactionMock.AssertNumberOfCalls(t, "Apply", 1)
 		}
 	})
 

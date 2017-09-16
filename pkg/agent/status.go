@@ -28,6 +28,7 @@ func NewStatusServer(readyCh <-chan interface{}) StatusServer {
 
 	go func() {
 		<-readyCh
+		s.log.Info("Status changed to ready")
 		s.ready = true
 	}()
 
