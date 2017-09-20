@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/shell"
+	"github.com/thetechnick/nginx-ingress/pkg/shell"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"

@@ -3,8 +3,8 @@ package parser
 import (
 	"fmt"
 
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/pb"
+	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 )
 
 // IngressExValidationError contains Secret and Ingress validation errors

@@ -1,7 +1,7 @@
 package config
 
 import (
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/pb"
+	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 	api_v1 "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"

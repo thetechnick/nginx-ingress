@@ -4,7 +4,7 @@ import (
 	"sort"
 
 	log "github.com/sirupsen/logrus"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/config"
 	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 

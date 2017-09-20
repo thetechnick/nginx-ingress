@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/pb"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/util"
+	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
+	"github.com/thetechnick/nginx-ingress/pkg/util"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 

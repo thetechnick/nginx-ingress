@@ -3,7 +3,7 @@ package local
 import (
 	"testing"
 
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/pb"
+	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"

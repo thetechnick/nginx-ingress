@@ -1,4 +1,4 @@
-package: gitlab.thetechnick.ninja/thetechnick/nginx-ingress
+package: github.com/thetechnick/nginx-ingress
 import:
 - package: github.com/golang/glog
 - package: k8s.io/apimachinery

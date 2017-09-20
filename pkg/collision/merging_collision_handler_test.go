@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/config"
 )
 
 func TestMergingCollisionHandler(t *testing.T) {

@@ -8,8 +8,8 @@ import (
 	"github.com/coreos/etcd/clientv3"
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/mock"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/pb"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/test"
+	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
+	"github.com/thetechnick/nginx-ingress/pkg/test"
 )
 
 var (

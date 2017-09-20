@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/pb"
+	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	api_v1 "k8s.io/client-go/pkg/api/v1"
 )

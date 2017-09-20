@@ -1,6 +1,6 @@
 package storage
 
-import "gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/pb"
+import "github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 
 const (
 	// MainConfigDir is the directory containing all configs

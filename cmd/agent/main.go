@@ -12,9 +12,9 @@ import (
 
 	"github.com/coreos/etcd/clientv3"
 	log "github.com/sirupsen/logrus"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/agent"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/local"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/version"
+	"github.com/thetechnick/nginx-ingress/pkg/agent"
+	"github.com/thetechnick/nginx-ingress/pkg/storage/local"
+	"github.com/thetechnick/nginx-ingress/pkg/version"
 )
 
 var (

@@ -3,8 +3,8 @@ package agent
 import (
 	"context"
 
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/pb"
+	"github.com/thetechnick/nginx-ingress/pkg/storage"
+	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/mvcc/mvccpb"

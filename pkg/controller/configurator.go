@@ -5,11 +5,11 @@ import (
 	"sync"
 
 	log "github.com/sirupsen/logrus"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/collision"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/parser"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/pb"
+	"github.com/thetechnick/nginx-ingress/pkg/collision"
+	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/parser"
+	"github.com/thetechnick/nginx-ingress/pkg/storage"
+	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 	api_v1 "k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/record"
 )

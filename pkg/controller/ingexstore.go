@@ -1,6 +1,6 @@
 package controller
 
-import "gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
+import "github.com/thetechnick/nginx-ingress/pkg/config"
 
 // IngressExStore returns an ingress and its related resources
 type IngressExStore interface {

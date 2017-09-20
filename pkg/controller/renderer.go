@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"text/template"
 
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/collision"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/pb"
+	"github.com/thetechnick/nginx-ingress/pkg/collision"
+	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 
 	log "github.com/sirupsen/logrus"
 )

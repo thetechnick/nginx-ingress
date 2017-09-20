@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/util"
+	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/util"
 	api_v1 "k8s.io/client-go/pkg/api/v1"
 )
 

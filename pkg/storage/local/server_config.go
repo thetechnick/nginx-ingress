@@ -6,9 +6,9 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	log "github.com/sirupsen/logrus"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/agent"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/pb"
+	"github.com/thetechnick/nginx-ingress/pkg/agent"
+	"github.com/thetechnick/nginx-ingress/pkg/storage"
+	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 )
 
 // NewServerConfigStorage stores the config in the file system configures a local nginx instance

@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/collision"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/collision"
+	"github.com/thetechnick/nginx-ingress/pkg/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )

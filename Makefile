@@ -1,7 +1,7 @@
 export CGO_ENABLED:=0
 
 VERSION=$(shell ./scripts/git-version)
-REPO=gitlab.thetechnick.ninja/thetechnick/nginx-ingress
+REPO=github.com/thetechnick/nginx-ingress
 LD_FLAGS="-w -X $(REPO)/pkg/version.Version=$(VERSION)"
 
 all: build

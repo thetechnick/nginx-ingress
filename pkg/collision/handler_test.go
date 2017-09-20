@@ -3,7 +3,7 @@ package collision
 import (
 	"time"
 
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/config"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/pkg/apis/extensions/v1beta1"

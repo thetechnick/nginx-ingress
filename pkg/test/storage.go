@@ -2,7 +2,7 @@ package test
 
 import (
 	"github.com/stretchr/testify/mock"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/storage/pb"
+	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 )
 
 type ServerConfigStorageMock struct {

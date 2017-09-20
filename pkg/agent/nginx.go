@@ -2,7 +2,7 @@ package agent
 
 import (
 	log "github.com/sirupsen/logrus"
-	"gitlab.thetechnick.ninja/thetechnick/nginx-ingress/pkg/shell"
+	"github.com/thetechnick/nginx-ingress/pkg/shell"
 )
 
 // Nginx controls a nginx process
