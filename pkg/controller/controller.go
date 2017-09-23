@@ -404,7 +404,18 @@ func (lbc *LoadBalancerController) getIngressEx(ingKey string) (*config.IngressE
 	}
 
 	ing := obj.(*extensions.Ingress)
-	return lbc.createIngress(ing)
+	ingEx, err := lbc.createIngress(ing)
+	if err != nil {
+		return nil, err
+	}
+
+	log.
+		WithField("ing", ingKey).
+		WithField("secrets", len(ingEx.Secrets)).
+		WithField("endps", len(ingEx.Endpoints)).
+		Debug("IngExStore get")
+
+	return ingEx, nil
 }
 
 func (lbc *LoadBalancerController) enqueueIngressForService(svc *api_v1.Service) {

@@ -39,6 +39,7 @@ func main() {
 	}
 	log.SetLevel(level)
 	log.SetOutput(os.Stderr)
+	log.SetFormatter(&log.JSONFormatter{})
 
 	endpoints := strings.Split(*endpointsString, ",")
 	cli, err := clientv3.New(clientv3.Config{

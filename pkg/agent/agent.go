@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"time"
 
 	"github.com/thetechnick/nginx-ingress/pkg/storage"
 	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
@@ -167,8 +168,6 @@ func (a *Agent) syncExistingServers() {
 	for _, kv := range resp.Kvs {
 		a.updateServerFromKey(kv)
 	}
-	a.readyCh <- nil
-	close(a.readyCh)
 }
 
 func (a *Agent) syncMainConfig() {
@@ -197,8 +196,19 @@ func (a *Agent) Run(ctx context.Context) {
 	a.syncMainConfig()
 	a.syncExistingServers()
 
-	// 3. set ready state
+	a.readyCh <- nil
+	close(a.readyCh)
+
+	t := time.NewTicker(30 * time.Second)
+	go func(t *time.Ticker) {
+		for range t.C {
+			a.log.Info("Resync after 30s")
+			a.syncMainConfig()
+			a.syncExistingServers()
+		}
+	}(t)
 
 	// block
 	<-ctx.Done()
+	t.Stop()
 }

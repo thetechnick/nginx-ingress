@@ -214,39 +214,38 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 		return
 	}
 
-	if len(dependencyMap) > 0 {
+	if len(dependencyMap) > 1 {
 		dependencyMapLogEntry(dependencyMap).WithField("ingress", updatedIngressKey).Info("has dependencies")
+		for ingressKey := range dependencyMap {
+			if ingressKey == updatedIngressKey {
+				continue
+			}
+
+			ingEx, gerr := c.ingExStore.GetIngressEx(ingressKey)
+			if gerr != nil {
+				return gerr
+			}
+
+			servers, perr := c.parseServerConfig(ingEx)
+			if perr != nil {
+				return perr
+			}
+			for _, server := range servers {
+				if _, ok := updated[ingressKey]; !ok {
+					updated[ingressKey] = map[string]bool{}
+				}
+				updated[ingressKey][server.Name] = true
+			}
+
+			if len(servers) > 0 {
+				mergeList = append(mergeList, collision.IngressConfig{
+					Ingress: ingEx.Ingress,
+					Servers: servers,
+				})
+			}
+		}
 	} else {
 		c.log.WithField("ingress", updatedIngressKey).Info("has no dependencies")
-	}
-
-	for ingressKey := range dependencyMap {
-		if ingressKey == updatedIngressKey {
-			continue
-		}
-
-		ingEx, gerr := c.ingExStore.GetIngressEx(ingressKey)
-		if gerr != nil {
-			return gerr
-		}
-
-		servers, perr := c.parseServerConfig(ingEx)
-		if perr != nil {
-			return perr
-		}
-		for _, server := range servers {
-			if _, ok := updated[ingressKey]; !ok {
-				updated[ingressKey] = map[string]bool{}
-			}
-			updated[ingressKey][server.Name] = true
-		}
-
-		if len(servers) > 0 {
-			mergeList = append(mergeList, collision.IngressConfig{
-				Ingress: ingEx.Ingress,
-				Servers: servers,
-			})
-		}
 	}
 
 	mergedServerConfigs, err := c.ch.Resolve(mergeList)
@@ -262,9 +261,9 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 		if err != nil {
 			return err
 		}
-		log.
+		c.log.
 			WithField("host", updated.Server.Name).
-			Info("updated host")
+			Debug("updated host")
 	}
 
 	// check if configs that where once generated
@@ -277,9 +276,9 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 					if err != nil {
 						return err
 					}
-					log.
+					c.log.
 						WithField("host", server.Name).
-						Info("deleted host")
+						Debug("deleted host")
 				}
 			}
 		} else {
@@ -289,9 +288,9 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 					if err != nil {
 						return err
 					}
-					log.
+					c.log.
 						WithField("host", server.Name).
-						Info("deleted host")
+						Debug("deleted host")
 				}
 			}
 		}

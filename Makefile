@@ -24,7 +24,7 @@ test-all:
 	./scripts/test
 
 clean:
-	@rm -rf bin/nginx-ingress
+	@rm -rf bin/lbc
 	@rm -rf bin/agent
 
 tools: bin/protoc bin/protoc-gen-go
