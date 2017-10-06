@@ -1,0 +1,39 @@
+apiVersion: v1
+data:
+  hsts: "True"
+  hsts-max-age: "31536000"
+  http2: "True"
+  log-format: '{ "time": "$time_iso8601", "@version": "1", "clientip": "$remote_addr",
+    "tag": "ingress", "remote_user": "$remote_user", "bytes": $bytes_sent, "duration":
+    $request_time, "status": $status, "request": "$request_uri", "urlpath": "$uri",
+    "urlquery": "$args", "method": "$request_method", "referer": "$http_referer",
+    "useragent": "$http_user_agent", "software": "nginx", "version": "$nginx_version",
+    "host": "$host", "upstream": "$upstream_addr", "upstream-status": "$upstream_status"
+    }'
+  proxy-hide-headers: Strict-Transport-Security
+  proxy-protocol: "True"
+  real-ip-header: proxy_protocol
+  real-ip-recursive: "True"
+  set-real-ip-from: 10.1.0.0/16
+  ssl-ciphers: |
+    EECDH+ECDSA+AESGCM EECDH+aRSA+AESGCM EECDH+ECDSA+SHA384 EECDH+ECDSA+SHA256 EECDH+aRSA+SHA384 EECDH+aRSA+SHA256 EECDH+aRSA+RC4 EECDH EDH+aRSA RC4 !aNULL !eNULL !LOW !3DES !MD5 !EXP !PSK !SRP !DSS !MEDIUM
+  ssl-dhparam-file: |
+    -----BEGIN DH PARAMETERS-----
+    MIICCAKCAgEA90036xFLTFicw9ZbOzLKlpgpOtVt0A3X0dh07YsaK5cShROxyQ30
+    HS+CXiZvTDGboG0LhJSVrqmFuhoLKUz4Zc4NyneBX7ejq12L07zFYXNVioPY96wa
+    +3Jd3TDjMpnDkpGKUjtBJE9LbVmJ4riSQJdidc4IfrGqkW0NKYUy8X/2FuKPHzVg
+    yfSfj1jQRrIFWtA4n2nmiUjJOg83LG1VdxfsXajCBN8Gy999rXU3mzT+IxawhkW0
+    gTnGMJKs7K4+K0cHiFExVezt/C2qOAXno9uQ6DKD/65rAklHBLtI3HBRpJDMCGa2
+    dx9+Hz/1v5xrjaB92SXIiCaGpDiLITTFnwXpMtpmc94oFevRzZ4hzWZv7IK2Ywsx
+    b0JAdtjseDWefuyY/Y6YQtjSuJg9rwnwD8JoNtpUbS/jE2JLI22W7F2iSb0Yzc4E
+    6nfXy6Qw2dJ6xlm1opoxzkuVDyc3SN11dEVRsj4iGWcvH7ZANzURVpd+ftkU0RpH
+    IlYWhIu3s8ImnrbMZ6U4NIikb6mZ6Tei35VzZ2bltgu6y6zyUXb6jLtmj5CaRSy8
+    Fq4m1tkQK2hjTfe8UTO4eJEHEfKhOsvqXfkshCIGgC0tswHamen4e+z0t8W7CAuP
+    EtrWgfWTYgSDAmXz5+qhaXn3KmxPuAfd73p/hTtY7S7BLZK1CSttW3MCAQI=
+    -----END DH PARAMETERS-----
+  ssl-prefer-server-ciphers: "True"
+kind: ConfigMap
+metadata:
+  annotations:
+  name: ingress-lbc
+  selfLink: /api/v1/namespaces/kube-system/configmaps/nginx-config

@@ -1,0 +1,42 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    name: ingress-lbc
+  name: ingress-lbc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: ingress-lbc
+  strategy:
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: ingress-lbc
+    spec:
+      containers:
+      - args:
+        - -nginx-configmaps=kube-system/ingress-lbc
+        image: quay.io/nico_schieder/ingress-lbc:0.7.1
+        imagePullPolicy: Always
+        name: lbc
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        - containerPort: 443
+          name: https
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          successThreshold: 1
+          tcpSocket:
+            port: 80
+          timeoutSeconds: 1

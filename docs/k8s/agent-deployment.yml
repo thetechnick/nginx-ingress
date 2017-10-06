@@ -18,10 +18,10 @@ spec:
     spec:
       containers:
       - args:
-        - -nginx-configmaps=kube-system/nginx-config
+        - -nginx-configmaps=kube-system/ingress-lbc
         - -server-mode
         - -etcd-endpoints=example-etcd-cluster-client:2379
-        image: quay.io/nico_schieder/ingress-lbc:0.5.0-dirty
+        image: quay.io/nico_schieder/ingress-lbc:0.7.1
         imagePullPolicy: Always
         name: lbc
 ---
