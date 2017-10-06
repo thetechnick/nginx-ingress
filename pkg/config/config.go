@@ -45,7 +45,6 @@ type Config struct {
 	MainServerSSLProtocols           string
 	MainServerSSLPreferServerCiphers bool
 	MainServerSSLCiphers             string
-	MainServerSSLDHParam             string
 	MainServerSSLDHParamFile         string
 }
 

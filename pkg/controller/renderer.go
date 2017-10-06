@@ -47,8 +47,13 @@ func (c *renderer) RenderMainConfig(controllerConfig *config.Config) (*pb.MainCo
 		LogFormat:                 controllerConfig.MainLogFormat,
 		SSLProtocols:              controllerConfig.MainServerSSLProtocols,
 		SSLCiphers:                controllerConfig.MainServerSSLCiphers,
-		SSLDHParam:                controllerConfig.MainServerSSLDHParam,
 		SSLPreferServerCiphers:    controllerConfig.MainServerSSLPreferServerCiphers,
+	}
+
+	mc := &pb.MainConfig{}
+	if controllerConfig.MainServerSSLDHParamFile != "" {
+		mc.Dhparam = []byte(controllerConfig.MainServerSSLDHParamFile)
+		mainCfg.SSLDHParam = ""
 	}
 
 	var buffer bytes.Buffer
@@ -56,13 +61,7 @@ func (c *renderer) RenderMainConfig(controllerConfig *config.Config) (*pb.MainCo
 	if err != nil {
 		return nil, err
 	}
-
-	mc := &pb.MainConfig{
-		Config: buffer.Bytes(),
-	}
-	if controllerConfig.MainServerSSLDHParamFile != "" {
-		mc.Dhparam = []byte(controllerConfig.MainServerSSLDHParamFile)
-	}
+	mc.Config = buffer.Bytes()
 	return mc, nil
 }
 

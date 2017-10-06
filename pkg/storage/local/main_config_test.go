@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/thetechnick/nginx-ingress/pkg/storage"
 	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 )
 
@@ -22,7 +23,7 @@ func TestConfigManager(t *testing.T) {
 	t.Run("Put", func(t *testing.T) {
 		nginxMock.On("Reload").Return(nil)
 		transactionMock.On("Update", "/etc/nginx/nginx.conf", "").Return(nil)
-		transactionMock.On("Update", "/etc/nginx/ssl/"+dhparamFilename, dhparam).Return(nil)
+		transactionMock.On("Update", storage.DHParamsFile, dhparam).Return(nil)
 		transactionMock.On("Apply")
 
 		err := cm.Put(&pb.MainConfig{
@@ -31,7 +32,7 @@ func TestConfigManager(t *testing.T) {
 		if assert.NoError(err) {
 			nginxMock.AssertCalled(t, "Reload")
 			transactionMock.AssertCalled(t, "Update", "/etc/nginx/nginx.conf", "")
-			transactionMock.AssertCalled(t, "Update", "/etc/nginx/ssl/"+dhparamFilename, dhparam)
+			transactionMock.AssertCalled(t, "Update", storage.DHParamsFile, dhparam)
 			transactionMock.AssertCalled(t, "Apply")
 		}
 	})

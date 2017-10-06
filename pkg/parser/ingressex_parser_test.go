@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"path"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/storage"
 	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	api_v1 "k8s.io/client-go/pkg/api/v1"
@@ -68,11 +70,11 @@ func TestIngressExParser(t *testing.T) {
 		mainConfig := config.Config{}
 		tlsCerts := map[string]*pb.TLSCertificate{
 			"one.example.com": &pb.TLSCertificate{
-				Name:    "ssl/one.example.com.pem",
+				Name:    path.Join(storage.CertificatesDir, "one.example.com.pem"),
 				Content: []byte{},
 			},
 		}
-		secretParserMock.On("Parse", secret).Return([]byte{}, nil)
+		secretParserMock.On("Parse", mock.Anything).Return([]byte{}, nil)
 		ingressParserMock.On("Parse", mainConfig, ingEx, tlsCerts).Return([]*config.Server{}, nil)
 
 		_, err := p.Parse(mainConfig, ingEx)

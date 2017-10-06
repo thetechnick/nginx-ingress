@@ -2,8 +2,10 @@ package parser
 
 import (
 	"fmt"
+	"path"
 
 	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/storage"
 	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 )
 
@@ -60,14 +62,14 @@ func (p *ingressExParser) Parse(mainConfig config.Config, ingEx *config.IngressE
 		}
 
 		for _, host := range tls.Hosts {
-			tlsName := fmt.Sprintf("ssl/%s.pem", host)
+			tlsName := path.Join(storage.CertificatesDir, fmt.Sprintf("%s.pem", host))
 			tlsCerts[host] = &pb.TLSCertificate{
 				Name:    tlsName,
 				Content: tlsCert,
 			}
 		}
 		if len(tls.Hosts) == 0 {
-			tlsName := fmt.Sprintf("ssl/%s.pem", "default")
+			tlsName := path.Join(storage.CertificatesDir, "default.pem")
 			tlsCerts[emptyHost] = &pb.TLSCertificate{
 				Name:    tlsName,
 				Content: tlsCert,

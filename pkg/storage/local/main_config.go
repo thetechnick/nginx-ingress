@@ -11,8 +11,7 @@ import (
 )
 
 const (
-	dhparamFilename = "dhparam.pem"
-	nginxFilename   = "nginx.conf"
+	nginxFilename = "nginx.conf"
 )
 
 // NewMainConfigStorage stores the config in the file system configures a local nginx instance
@@ -52,8 +51,7 @@ func (s *localMainConfigStorage) Put(cfg *pb.MainConfig) error {
 	}
 
 	if cfg.Dhparam != nil {
-		dhparamFilename := path.Join(storage.CertificatesDir, dhparamFilename)
-		err = t.Update(dhparamFilename, string(cfg.Dhparam))
+		err = t.Update(storage.DHParamsFile, string(cfg.Dhparam))
 		if err != nil {
 			t.Rollback()
 			return err
