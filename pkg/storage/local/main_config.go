@@ -51,7 +51,7 @@ func (s *localMainConfigStorage) Put(cfg *pb.MainConfig) error {
 	}
 
 	if cfg.Dhparam != nil {
-		err = t.Update(storage.DHParamsFile, string(cfg.Dhparam))
+		err = t.Update(storage.DHParamFile, string(cfg.Dhparam))
 		if err != nil {
 			t.Rollback()
 			return err

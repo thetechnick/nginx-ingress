@@ -6,6 +6,7 @@ import (
 
 	"github.com/thetechnick/nginx-ingress/pkg/collision"
 	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/storage"
 	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 
 	log "github.com/sirupsen/logrus"
@@ -53,7 +54,7 @@ func (c *renderer) RenderMainConfig(controllerConfig *config.Config) (*pb.MainCo
 	mc := &pb.MainConfig{}
 	if controllerConfig.MainServerSSLDHParamFile != "" {
 		mc.Dhparam = []byte(controllerConfig.MainServerSSLDHParamFile)
-		mainCfg.SSLDHParam = ""
+		mainCfg.SSLDHParam = storage.DHParamFile
 	}
 
 	var buffer bytes.Buffer

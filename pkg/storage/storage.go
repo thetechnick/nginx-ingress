@@ -9,8 +9,8 @@ const (
 	ServerConfigDir = "/etc/nginx/conf.d/"
 	// CertificatesDir contains the tls/ssl certificates and the dhparam file
 	CertificatesDir = "/etc/nginx/ssl/"
-	// DHParamsFile path to the DHParamsFile
-	DHParamsFile = "/etc/nginx/ssl/dhparam.pem"
+	// DHParamFile path to the DHParamsFile
+	DHParamFile = "/etc/nginx/ssl/dhparam.pem"
 )
 
 // ServerConfigStorage stores ServerConfigs
