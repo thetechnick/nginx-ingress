@@ -17,6 +17,7 @@ import (
 	"github.com/thetechnick/nginx-ingress/pkg/storage/etcd"
 	"github.com/thetechnick/nginx-ingress/pkg/storage/local"
 	"github.com/thetechnick/nginx-ingress/pkg/version"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/rest"
@@ -52,6 +53,9 @@ var (
 		configuration. The value must follow the following format: <namespace>/<name>`)
 
 	printVersion = flag.Bool("version", false, "Print version and exit")
+
+	selector = flag.String("selector", "",
+		`Selector (label query) to filter ingress objects on, supports the same syntax as kubectl`)
 )
 
 func main() {
@@ -70,6 +74,17 @@ func main() {
 	}
 	log.SetLevel(level)
 	log.SetOutput(os.Stderr)
+
+	var k8sSelector labels.Selector
+	if *selector != "" {
+		var err error
+		k8sSelector, err = labels.Parse(*selector)
+		if err != nil {
+			log.WithError(err).Fatal("unable to parse label selector")
+		}
+	} else {
+		k8sSelector = labels.Everything()
+	}
 
 	log.Infof("Starting NGINX loadbalancer controller Version %v\n", version.Version)
 
@@ -117,6 +132,7 @@ func main() {
 			kubeClient,
 			30*time.Second,
 			*watchNamespace,
+			k8sSelector,
 			*nginxConfigMaps,
 			mcs,
 			scs,
@@ -136,6 +152,7 @@ func main() {
 		kubeClient,
 		30*time.Second,
 		*watchNamespace,
+		k8sSelector,
 		*nginxConfigMaps,
 		mcs,
 		scs,

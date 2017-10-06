@@ -19,11 +19,14 @@ package controller
 import (
 	"fmt"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/tools/cache"
-
+	"k8s.io/apimachinery/pkg/watch"
 	api_v1 "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	"k8s.io/client-go/tools/cache"
 )
 
 // compareLinks returns true if the 2 self links are equal.
@@ -127,4 +130,27 @@ func FindPort(pod *api_v1.Pod, svcPort *api_v1.ServicePort) (int32, error) {
 	}
 
 	return 0, fmt.Errorf("no suitable port for manifest: %s", pod.UID)
+}
+
+// NewListWatchFromClient creates a new ListWatch from the specified client, resource, namespace and label selector.
+func NewListWatchFromClient(c cache.Getter, resource string, namespace string, labelsSelector labels.Selector) *cache.ListWatch {
+	listFunc := func(options metav1.ListOptions) (runtime.Object, error) {
+		return c.Get().
+			Namespace(namespace).
+			Resource(resource).
+			VersionedParams(&options, metav1.ParameterCodec).
+			LabelsSelectorParam(labelsSelector).
+			Do().
+			Get()
+	}
+	watchFunc := func(options metav1.ListOptions) (watch.Interface, error) {
+		options.Watch = true
+		return c.Get().
+			Namespace(namespace).
+			Resource(resource).
+			VersionedParams(&options, metav1.ParameterCodec).
+			LabelsSelectorParam(labelsSelector).
+			Watch()
+	}
+	return &cache.ListWatch{ListFunc: listFunc, WatchFunc: watchFunc}
 }

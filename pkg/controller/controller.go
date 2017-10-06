@@ -40,6 +40,7 @@ import (
 )
 
 const (
+	ingressGroupKey   = "kubernetes.io/ingress.group"
 	ingressClassKey   = "kubernetes.io/ingress.class"
 	nginxIngressClass = "nginx"
 )
@@ -71,6 +72,7 @@ func NewLoadBalancerController(
 	kubeClient kubernetes.Interface,
 	resyncPeriod time.Duration,
 	namespace string,
+	selector labels.Selector,
 	nginxConfigMaps string,
 	mcs storage.MainConfigStorage,
 	scs storage.ServerConfigStorage,
@@ -151,7 +153,7 @@ func NewLoadBalancerController(
 		},
 	}
 	lbc.ingLister.Store, lbc.ingController = cache.NewInformer(
-		cache.NewListWatchFromClient(lbc.client.Extensions().RESTClient(), "ingresses", namespace, fields.Everything()),
+		NewListWatchFromClient(lbc.client.Extensions().RESTClient(), "ingresses", namespace, selector),
 		&extensions.Ingress{}, resyncPeriod, ingHandlers)
 
 	svcHandlers := cache.ResourceEventHandlerFuncs{
