@@ -64,7 +64,7 @@ func TestServerConfigStorage(t *testing.T) {
 			"test": "test",
 		},
 		Tls: &pb.TLSCertificate{
-			Name:    "ssl/test.pem",
+			Name:    "/etc/nginx/ssl/test.pem",
 			Content: []byte("\n"),
 		},
 	}
@@ -137,7 +137,7 @@ func TestServerConfigStorage(t *testing.T) {
 		err := cm.Delete(&pb.ServerConfig{
 			Name: "test",
 			Tls: &pb.TLSCertificate{
-				Name:    "ssl/test.pem",
+				Name:    "/etc/nginx/ssl/test.pem",
 				Content: []byte("\n"),
 			},
 		})

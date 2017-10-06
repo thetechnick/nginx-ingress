@@ -52,8 +52,7 @@ func (s *localServerStorage) Put(cfg *pb.ServerConfig) error {
 	}
 
 	if cfg.Tls != nil {
-		filename := path.Join(storage.MainConfigDir, cfg.Tls.Name)
-		err = t.Update(filename, string(cfg.Tls.Content))
+		err = t.Update(cfg.Tls.Name, string(cfg.Tls.Content))
 		if err != nil {
 			t.Rollback()
 			return err
@@ -87,8 +86,7 @@ func (s *localServerStorage) Delete(cfg *pb.ServerConfig) error {
 	}
 
 	if cfg.Tls != nil {
-		filename := path.Join(storage.MainConfigDir, cfg.Tls.Name)
-		err = t.Delete(filename)
+		err = t.Delete(cfg.Tls.Name)
 		if err != nil {
 			t.Rollback()
 			return err
