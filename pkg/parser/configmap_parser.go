@@ -91,6 +91,9 @@ func (p *configMapParser) Parse(cfgm *api_v1.ConfigMap) (*config.Config, error) 
 	if logFormat, exists := cfgm.Data["log-format"]; exists {
 		cfg.MainLogFormat = logFormat
 	}
+	if workerShutdownTimeout, exists := cfgm.Data["worker-shutdown-timeout"]; exists {
+		cfg.MainWorkerShutdownTimeout = workerShutdownTimeout
+	}
 	if setRealIPFrom, exists := util.GetMapKeyAsStringSlice(cfgm.Data, "set-real-ip-from", cfgm, ","); exists {
 		cfg.SetRealIPFrom = setRealIPFrom
 	}

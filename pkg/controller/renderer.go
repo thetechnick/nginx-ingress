@@ -49,6 +49,7 @@ func (c *renderer) RenderMainConfig(controllerConfig *config.Config) (*pb.MainCo
 		SSLProtocols:              controllerConfig.MainServerSSLProtocols,
 		SSLCiphers:                controllerConfig.MainServerSSLCiphers,
 		SSLPreferServerCiphers:    controllerConfig.MainServerSSLPreferServerCiphers,
+		WorkerShutdownTimeout:     controllerConfig.MainWorkerShutdownTimeout,
 	}
 
 	mc := &pb.MainConfig{}

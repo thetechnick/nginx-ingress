@@ -25,6 +25,7 @@ type Config struct {
 	MainServerNamesHashBucketSize string
 	MainServerNamesHashMaxSize    string
 	MainLogFormat                 string
+	MainWorkerShutdownTimeout     string
 	ProxyBuffering                bool
 	ProxyBuffers                  string
 	ProxyBufferSize               string
@@ -56,6 +57,7 @@ func NewDefaultConfig() *Config {
 		ProxyReadTimeout:           "60s",
 		ClientMaxBodySize:          "1m",
 		MainServerNamesHashMaxSize: "512",
+		MainWorkerShutdownTimeout:  "10s",
 		ProxyBuffering:             true,
 		HSTSMaxAge:                 2592000,
 	}
@@ -168,6 +170,7 @@ type MainConfig struct {
 	SSLPreferServerCiphers bool
 	SSLCiphers             string
 	SSLDHParam             string
+	WorkerShutdownTimeout  string
 }
 
 // CertificatePair describes a key and certificate pair
