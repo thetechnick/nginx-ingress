@@ -94,6 +94,9 @@ func involvedIngressObjects(serverConfigs []*pb.ServerConfig) map[string]bool {
 }
 
 func (c *configurator) parseServerConfig(ingEx *config.IngressEx) ([]*config.Server, error) {
+	if ingEx == nil {
+		return []*config.Server{}, nil
+	}
 	servers, err := c.ingExParser.Parse(*c.mainConfig, ingEx)
 	if err != nil {
 		if verr, ok := err.(*parser.IngressExValidationError); ok {
@@ -190,6 +193,10 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 		return
 	}
 	if updatedIngEx != nil {
+		c.log.
+			WithField("ingress", updatedIngressKey).
+			Info("updating")
+
 		var updatedServers []*config.Server
 		updatedServers, err = c.parseServerConfig(updatedIngEx)
 		if err != nil {
@@ -207,6 +214,10 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 			Ingress: updatedIngEx.Ingress,
 			Servers: updatedServers,
 		})
+	} else {
+		c.log.
+			WithField("ingress", updatedIngressKey).
+			Info("deleting")
 	}
 
 	dependencyMap, err := c.dependencyMap(updatedIngressKey, updatedServerNames, nil)
@@ -224,6 +235,9 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 			ingEx, gerr := c.ingExStore.GetIngressEx(ingressKey)
 			if gerr != nil {
 				return gerr
+			}
+			if ingEx == nil {
+				continue
 			}
 
 			servers, perr := c.parseServerConfig(ingEx)
