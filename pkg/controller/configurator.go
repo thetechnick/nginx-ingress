@@ -32,6 +32,8 @@ func NewConfigurator(
 	secretAccessor SecretAccessor,
 	endpointsAccessor EndpointsAccessor,
 
+	secretWatchlist Watchlist,
+
 	recorder record.EventRecorder,
 	mcs storage.MainConfigStorage,
 	scs storage.ServerConfigStorage,
@@ -43,6 +45,8 @@ func NewConfigurator(
 		ingressAccessor:   ingressAccessor,
 		secretAccessor:    secretAccessor,
 		endpointsAccessor: endpointsAccessor,
+
+		secretWatchlist: secretWatchlist,
 
 		ingParser:                 config.NewIngressConfigParser(),
 		tlsSecretParser:           config.NewTLSSecretParser(),
@@ -61,6 +65,8 @@ type configurator struct {
 	log        *log.Entry
 	mainConfig *config.GlobalConfig
 	mutex      sync.Mutex
+
+	secretWatchlist Watchlist
 
 	mcs storage.MainConfigStorage
 	scs storage.ServerConfigStorage
@@ -212,6 +218,7 @@ func (c *configurator) serverConfigForIngressKey(ingressKey string) (
 	servers []*config.Server,
 	err error,
 ) {
+	c.secretWatchlist.Remove(ingressKey)
 	ingress, err = c.ingressAccessor.GetByKey(ingressKey)
 	if err != nil {
 		if api_errors.IsNotFound(err) {
@@ -219,6 +226,7 @@ func (c *configurator) serverConfigForIngressKey(ingressKey string) (
 		}
 		return
 	}
+
 	ingressCfg, warning, cfgErr := c.ingParser.Parse(ingress)
 	if warning != nil {
 		c.recordError("Config Warnings", warning)
@@ -239,11 +247,17 @@ func (c *configurator) serverConfigForIngressKey(ingressKey string) (
 			namespace = parts[0]
 			name = parts[1]
 		}
+		c.secretWatchlist.Add(fmt.Sprintf("%s/%s", namespace, name), ingressKey)
 
 		var secret *api_v1.Secret
 		secret, err = c.secretAccessor.Get(namespace, name)
 		if err != nil {
-			err = errors.WrapInObjectContext(err, ingress)
+			if !api_errors.IsNotFound(err) {
+				err = errors.WrapInObjectContext(err, ingress)
+				c.recordError("Config Error", err)
+			} else {
+				c.recordError("Config Error", errors.WrapInObjectContext(err, ingress))
+			}
 			return
 		}
 
@@ -257,9 +271,16 @@ func (c *configurator) serverConfigForIngressKey(ingressKey string) (
 	// get secrets
 	tlsSecrets := map[string]*pb.File{}
 	for _, tls := range ingress.Spec.TLS {
+		c.secretWatchlist.Add(fmt.Sprintf("%s/%s", ingress.Namespace, tls.SecretName), ingressKey)
+
 		var secret *api_v1.Secret
 		if secret, err = c.secretAccessor.Get(ingress.Namespace, tls.SecretName); err != nil {
-			err = errors.WrapInObjectContext(err, ingress)
+			if !api_errors.IsNotFound(err) {
+				err = errors.WrapInObjectContext(err, ingress)
+				c.recordError("Config Error", err)
+			} else {
+				c.recordError("Config Error", errors.WrapInObjectContext(err, ingress))
+			}
 			return
 		}
 
@@ -361,7 +382,13 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 	// First Ingress/Updated Ingress
 	updatedIngress, updatedServers, err := c.serverConfigForIngressKey(updatedIngressKey)
 	if err != nil {
-		c.recordError("Config Error", err)
+		if api_errors.IsNotFound(err) {
+			c.log.
+				WithError(err).
+				WithField("ingress", updatedIngressKey).
+				Info("waiting until dependency is available")
+			return nil
+		}
 		return
 	}
 

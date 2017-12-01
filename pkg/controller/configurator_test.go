@@ -214,6 +214,8 @@ func TestConfigurator(t *testing.T) {
 			secretAccessor:    secretAccessor,
 			endpointsAccessor: endpointsAccessor,
 
+			secretWatchlist: NewWatchlist(),
+
 			configMapParser:    configMapParser,
 			tlsSecretParser:    tlsSecretParser,
 			ingParser:          ingressConfigParser,

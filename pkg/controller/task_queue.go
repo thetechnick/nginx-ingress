@@ -14,6 +14,7 @@ type TaskQueue interface {
 	Run(period time.Duration, stopCh <-chan struct{})
 	// Enqueue enqueues ns/name of the given api object in the task queue.
 	Enqueue(obj interface{})
+	EnqueueKey(key string)
 	Requeue(key string, err error)
 	RequeueAfter(key string, err error, after time.Duration)
 	// Shutdown shuts down the work queue and waits for the worker to ACK
@@ -58,6 +59,10 @@ func (t *taskQueue) Enqueue(obj interface{}) {
 			Error("Couldn't get key for object, skipping")
 		return
 	}
+	t.queue.Add(key)
+}
+
+func (t *taskQueue) EnqueueKey(key string) {
 	t.queue.Add(key)
 }
 

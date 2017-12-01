@@ -49,13 +49,18 @@ const (
 // LoadBalancerController watches Kubernetes API and
 // reconfigures NGINX via Controller when needed
 type LoadBalancerController struct {
-	client               kubernetes.Interface
-	ingController        cache.Controller
-	svcController        cache.Controller
-	endpController       cache.Controller
-	cfgmController       cache.Controller
+	client           kubernetes.Interface
+	ingController    cache.Controller
+	svcController    cache.Controller
+	endpController   cache.Controller
+	cfgmController   cache.Controller
+	secretController cache.Controller
+
+	secretWatchlist Watchlist
+
 	ingLister            StoreToIngressLister
 	svcLister            cache.Store
+	secretLister         cache.Store
 	endpLister           StoreToEndpointLister
 	cfgmLister           StoreToConfigMapLister
 	ingQueue             TaskQueue
@@ -83,14 +88,17 @@ func NewLoadBalancerController(
 		Interface: kubeClient.Core().Events(""),
 	})
 	lbc := LoadBalancerController{
-		client: kubeClient,
-		stopCh: make(chan struct{}),
+		client:          kubeClient,
+		stopCh:          make(chan struct{}),
+		secretWatchlist: NewWatchlist(),
 	}
 
 	lbc.configurator = NewConfigurator(
 		&ingressAccessorFuncs{lbc.getIngressByKey},
 		&secretAccessorFuncs{lbc.getSecret},
 		&endpointsAccessorFuncs{lbc.getEndpointsForIngressBackend},
+
+		lbc.secretWatchlist,
 
 		eventBroadcaster.NewRecorder(scheme.Scheme, api_v1.EventSource{Component: "ingress-controller"}),
 		mcs,
@@ -159,6 +167,47 @@ func NewLoadBalancerController(
 	lbc.ingLister.Store, lbc.ingController = cache.NewInformer(
 		NewListWatchFromClient(lbc.client.Extensions().RESTClient(), "ingresses", namespace, selector),
 		&extensions.Ingress{}, resyncPeriod, ingHandlers)
+
+	secretHandlers := cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			addSecret := obj.(*api_v1.Secret)
+			lbc.syncSecret(addSecret)
+		},
+		DeleteFunc: func(obj interface{}) {
+			remSecret, isSecret := obj.(*api_v1.Secret)
+			if !isSecret {
+				deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
+				if !ok {
+					log.
+						WithField("obj", obj).
+						Error("Error received unexpected secret object, skipping")
+					return
+				}
+				remSecret, ok = deletedState.Obj.(*api_v1.Secret)
+				if !ok {
+					log.
+						WithField("obj", deletedState.Obj).
+						Error("Error DeletedFinalStateUnknown contained non-Secret object, skipping")
+					return
+				}
+			}
+			lbc.syncSecret(remSecret)
+		},
+		UpdateFunc: func(old, cur interface{}) {
+			if !reflect.DeepEqual(old, cur) {
+				updateSecret := cur.(*api_v1.Secret)
+				lbc.syncSecret(updateSecret)
+			}
+		},
+	}
+	lbc.secretLister, lbc.secretController = cache.NewInformer(
+		cache.NewListWatchFromClient(
+			lbc.client.Core().RESTClient(),
+			"secrets",
+			namespace,
+			fields.Everything(),
+		),
+		&api_v1.Secret{}, resyncPeriod, secretHandlers)
 
 	svcHandlers := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -334,12 +383,24 @@ func (lbc *LoadBalancerController) Run() {
 	go lbc.ingController.Run(lbc.stopCh)
 	go lbc.svcController.Run(lbc.stopCh)
 	go lbc.endpController.Run(lbc.stopCh)
+	go lbc.secretController.Run(lbc.stopCh)
 	go lbc.ingQueue.Run(time.Second, lbc.stopCh)
 	if lbc.watchNginxConfigMaps {
 		go lbc.cfgmController.Run(lbc.stopCh)
 		go lbc.cfgmQueue.Run(time.Second, lbc.stopCh)
 	}
 	<-lbc.stopCh
+}
+
+func (lbc *LoadBalancerController) syncSecret(secret *api_v1.Secret) {
+	key, err := keyFunc(secret)
+	if err != nil {
+		log.WithError(err).Error("Error getting key for secret")
+		return
+	}
+	for _, watcher := range lbc.secretWatchlist.Watchers(key) {
+		lbc.ingQueue.EnqueueKey(watcher)
+	}
 }
 
 func (lbc *LoadBalancerController) syncCfgm(key string) {
