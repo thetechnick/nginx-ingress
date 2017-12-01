@@ -50,7 +50,7 @@ http {
     {{if .SSLProtocols}}ssl_protocols {{.SSLProtocols}};{{end}}
     {{if .SSLCiphers}}ssl_ciphers "{{.SSLCiphers}}";{{end}}
     {{if .SSLPreferServerCiphers}}ssl_prefer_server_ciphers on;{{end}}
-    {{if .SSLDHParam}}ssl_dhparam {{.SSLDHParam}};{{end}}
+    {{if .SSLDHParamsFile }}ssl_dhparam {{.SSLDHParamsFile.Name}};{{end}}
 
     {{if .HealthStatus}}
     server {

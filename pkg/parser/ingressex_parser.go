@@ -21,7 +21,7 @@ func (e *IngressExValidationError) Error() string {
 
 // IngressExParser combines the secret parser and the ingress parser
 type IngressExParser interface {
-	Parse(config.Config, *config.IngressEx) ([]*config.Server, error)
+	Parse(config.GlobalConfig, *config.IngressEx) ([]*config.Server, error)
 }
 
 // NewIngressExParser creates a new IngressExParser
@@ -37,7 +37,7 @@ type ingressExParser struct {
 	ingressParser IngressParser
 }
 
-func (p *ingressExParser) Parse(mainConfig config.Config, ingEx *config.IngressEx) ([]*config.Server, error) {
+func (p *ingressExParser) Parse(mainConfig config.GlobalConfig, ingEx *config.IngressEx) ([]*config.Server, error) {
 	// TLS
 	tlsCerts := map[string]*pb.TLSCertificate{}
 	for _, tls := range ingEx.Ingress.Spec.TLS {

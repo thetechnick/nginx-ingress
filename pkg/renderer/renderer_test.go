@@ -1,4 +1,4 @@
-package controller
+package renderer
 
 import (
 	"testing"
@@ -20,9 +20,13 @@ func TestRenderer(t *testing.T) {
 		config := config.NewDefaultConfig()
 		config.MainServerSSLDHParamFile = dhparamFile
 
-		mc, err := c.RenderMainConfig(config)
-		assert.NoError(err)
-		assert.Equal(dhparamFile, string(mc.Dhparam))
+		mc, err := c.RenderMainConfig(MainConfigTemplateDataFromIngressConfig(config))
+		if !assert.NoError(err) {
+			return
+		}
+		if assert.Len(mc.Files, 1) {
+			assert.Equal(dhparamFile, string(mc.Files[0].Content))
+		}
 	})
 
 	t.Run("RenderServerConfig", func(t *testing.T) {

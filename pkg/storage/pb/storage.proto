@@ -4,16 +4,27 @@ package pb;
 message ServerConfig {
   string name = 1;
   bytes config = 2;
-  TLSCertificate tls = 3;
+  TLSCertificate tls = 3; // deprecated
   map<string, string> meta = 4;
+
+  repeated File files = 5;
 }
 
+// deprecated
 message TLSCertificate {
+  string name = 1;
+  bytes content = 2;
+}
+
+// additional files referenced by other configs
+message File {
   string name = 1;
   bytes content = 2;
 }
 
 message MainConfig {
   bytes config = 1;
-  bytes dhparam = 2;
+  bytes dhparam = 2; // deprecated
+
+  repeated File files = 3;
 }

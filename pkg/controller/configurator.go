@@ -10,6 +10,7 @@ import (
 	"github.com/thetechnick/nginx-ingress/pkg/config"
 	"github.com/thetechnick/nginx-ingress/pkg/errors"
 	"github.com/thetechnick/nginx-ingress/pkg/parser"
+	"github.com/thetechnick/nginx-ingress/pkg/renderer"
 	"github.com/thetechnick/nginx-ingress/pkg/storage"
 	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 	api_v1 "k8s.io/client-go/pkg/api/v1"
@@ -37,21 +38,21 @@ func NewConfigurator(
 		configMapParser: parser.NewConfigMapParser(),
 		ch:              collision.NewMergingCollisionHandler(),
 		ingExStore:      ingExStore,
-		configurator:    NewRenderer(),
+		configurator:    renderer.NewRenderer(),
 		recorder:        recorder,
 		log:             log.WithField("module", "Configurator"),
 	}
 }
 
 type configurator struct {
-	mainConfig      *config.Config
+	mainConfig      *config.GlobalConfig
 	mcs             storage.MainConfigStorage
 	scs             storage.ServerConfigStorage
 	ingExParser     parser.IngressExParser
 	configMapParser parser.ConfigMapParser
 	ch              collision.Handler
 	ingExStore      IngressExStore
-	configurator    Renderer
+	configurator    renderer.Renderer
 	mutex           sync.Mutex
 	recorder        record.EventRecorder
 	log             *log.Entry
@@ -70,7 +71,9 @@ func (c *configurator) ConfigUpdated(cfgm *api_v1.ConfigMap) error {
 	}
 	c.mainConfig = nginxConfig
 
-	configUpdate, err := c.configurator.RenderMainConfig(nginxConfig)
+	configUpdate, err := c.configurator.RenderMainConfig(
+		renderer.MainConfigTemplateDataFromIngressConfig(nginxConfig),
+	)
 	if err != nil {
 		return err
 	}

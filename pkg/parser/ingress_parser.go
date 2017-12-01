@@ -26,7 +26,7 @@ func (e *IngressAnnotationError) Error() string {
 
 // IngressParser parses ingress objects
 type IngressParser interface {
-	Parse(ingCfg config.Config, ingEx *config.IngressEx, pems map[string]*pb.TLSCertificate) ([]*config.Server, error)
+	Parse(ingCfg config.GlobalConfig, ingEx *config.IngressEx, pems map[string]*pb.TLSCertificate) ([]*config.Server, error)
 }
 
 // NewIngressParser returns a new IngressParser instance
@@ -36,7 +36,7 @@ func NewIngressParser() IngressParser {
 
 type ingressParser struct{}
 
-func (p *ingressParser) Parse(ingCfg config.Config, ingEx *config.IngressEx, pems map[string]*pb.TLSCertificate) ([]*config.Server, error) {
+func (p *ingressParser) Parse(ingCfg config.GlobalConfig, ingEx *config.IngressEx, pems map[string]*pb.TLSCertificate) ([]*config.Server, error) {
 	ing := ingEx.Ingress
 	errs := []error{}
 	if serverTokens, exists, err := util.GetMapKeyAsBool(ing.Annotations, "nginx.org/server-tokens"); exists {

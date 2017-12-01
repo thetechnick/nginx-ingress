@@ -1,4 +1,4 @@
-package controller
+package renderer
 
 import (
 	"bytes"
@@ -6,7 +6,6 @@ import (
 
 	"github.com/thetechnick/nginx-ingress/pkg/collision"
 	"github.com/thetechnick/nginx-ingress/pkg/config"
-	"github.com/thetechnick/nginx-ingress/pkg/storage"
 	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 
 	log "github.com/sirupsen/logrus"
@@ -14,7 +13,7 @@ import (
 
 // Renderer generates storage objects
 type Renderer interface {
-	RenderMainConfig(controllerConfig *config.Config) (*pb.MainConfig, error)
+	RenderMainConfig(mainConfig *MainConfigTemplateData) (*pb.MainConfig, error)
 	RenderServerConfig(mergedConfig *collision.MergedIngressConfig) (*pb.ServerConfig, error)
 }
 
@@ -40,22 +39,12 @@ func NewRenderer() Renderer {
 	return c
 }
 
-func (c *renderer) RenderMainConfig(controllerConfig *config.Config) (*pb.MainConfig, error) {
-	mainCfg := &config.MainConfig{
-		HTTPSnippets:              controllerConfig.MainHTTPSnippets,
-		ServerNamesHashBucketSize: controllerConfig.MainServerNamesHashBucketSize,
-		ServerNamesHashMaxSize:    controllerConfig.MainServerNamesHashMaxSize,
-		LogFormat:                 controllerConfig.MainLogFormat,
-		SSLProtocols:              controllerConfig.MainServerSSLProtocols,
-		SSLCiphers:                controllerConfig.MainServerSSLCiphers,
-		SSLPreferServerCiphers:    controllerConfig.MainServerSSLPreferServerCiphers,
-		WorkerShutdownTimeout:     controllerConfig.MainWorkerShutdownTimeout,
-	}
-
+func (c *renderer) RenderMainConfig(mainCfg *MainConfigTemplateData) (*pb.MainConfig, error) {
 	mc := &pb.MainConfig{}
-	if controllerConfig.MainServerSSLDHParamFile != "" {
-		mc.Dhparam = []byte(controllerConfig.MainServerSSLDHParamFile)
-		mainCfg.SSLDHParam = storage.DHParamFile
+	if mainCfg.SSLDHParamsFile != nil {
+		mc.Files = []*pb.File{
+			mainCfg.SSLDHParamsFile,
+		}
 	}
 
 	var buffer bytes.Buffer

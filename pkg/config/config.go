@@ -11,58 +11,6 @@ import (
 // which identifies an object
 var KeyFunc = cache.DeletionHandlingMetaNamespaceKeyFunc
 
-// Config holds NGINX configuration parameters
-type Config struct {
-	LocationSnippets              []string
-	ServerSnippets                []string
-	ServerTokens                  bool
-	ProxyConnectTimeout           string
-	ProxyReadTimeout              string
-	ClientMaxBodySize             string
-	HTTP2                         bool
-	RedirectToHTTPS               bool
-	MainHTTPSnippets              []string
-	MainServerNamesHashBucketSize string
-	MainServerNamesHashMaxSize    string
-	MainLogFormat                 string
-	MainWorkerShutdownTimeout     string
-	ProxyBuffering                bool
-	ProxyBuffers                  string
-	ProxyBufferSize               string
-	ProxyMaxTempFileSize          string
-	ProxyProtocol                 bool
-	ProxyHideHeaders              []string
-	ProxyPassHeaders              []string
-	HSTS                          bool
-	HSTSMaxAge                    int64
-	HSTSIncludeSubdomains         bool
-
-	// http://nginx.org/en/docs/http/ngx_http_realip_module.html
-	RealIPHeader    string
-	SetRealIPFrom   []string
-	RealIPRecursive bool
-
-	// http://nginx.org/en/docs/http/ngx_http_ssl_module.html
-	MainServerSSLProtocols           string
-	MainServerSSLPreferServerCiphers bool
-	MainServerSSLCiphers             string
-	MainServerSSLDHParamFile         string
-}
-
-// NewDefaultConfig creates a Config with default values
-func NewDefaultConfig() *Config {
-	return &Config{
-		ServerTokens:               true,
-		ProxyConnectTimeout:        "60s",
-		ProxyReadTimeout:           "60s",
-		ClientMaxBodySize:          "1m",
-		MainServerNamesHashMaxSize: "512",
-		MainWorkerShutdownTimeout:  "10s",
-		ProxyBuffering:             true,
-		HSTSMaxAge:                 2592000,
-	}
-}
-
 // Upstream describes an NGINX upstream
 type Upstream struct {
 	Name            string
@@ -138,7 +86,7 @@ type IngressEx struct {
 }
 
 // CreateLocation creates a new location from the given params
-func CreateLocation(path string, upstream Upstream, cfg *Config, websocket bool, rewrite string, ssl bool) Location {
+func CreateLocation(path string, upstream Upstream, cfg *GlobalConfig, websocket bool, rewrite string, ssl bool) Location {
 	loc := Location{
 		Path:                 path,
 		Upstream:             upstream,
@@ -156,21 +104,6 @@ func CreateLocation(path string, upstream Upstream, cfg *Config, websocket bool,
 	}
 
 	return loc
-}
-
-// MainConfig describe the main NGINX configuration file
-type MainConfig struct {
-	ServerNamesHashBucketSize string
-	ServerNamesHashMaxSize    string
-	LogFormat                 string
-	HealthStatus              bool
-	HTTPSnippets              []string
-	// http://nginx.org/en/docs/http/ngx_http_ssl_module.html
-	SSLProtocols           string
-	SSLPreferServerCiphers bool
-	SSLCiphers             string
-	SSLDHParam             string
-	WorkerShutdownTimeout  string
 }
 
 // CertificatePair describes a key and certificate pair

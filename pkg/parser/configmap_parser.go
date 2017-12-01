@@ -22,7 +22,7 @@ func (e *ConfigMapKeyError) Error() string {
 
 // ConfigMapParser parses the server config from a ConfigMap
 type ConfigMapParser interface {
-	Parse(cfgm *api_v1.ConfigMap) (*config.Config, error)
+	Parse(cfgm *api_v1.ConfigMap) (*config.GlobalConfig, error)
 }
 
 // NewConfigMapParser returns a new ConfigMapParser
@@ -32,7 +32,7 @@ func NewConfigMapParser() ConfigMapParser {
 
 type configMapParser struct{}
 
-func (p *configMapParser) Parse(cfgm *api_v1.ConfigMap) (*config.Config, error) {
+func (p *configMapParser) Parse(cfgm *api_v1.ConfigMap) (*config.GlobalConfig, error) {
 	errs := []error{}
 	cfg := config.NewDefaultConfig()
 

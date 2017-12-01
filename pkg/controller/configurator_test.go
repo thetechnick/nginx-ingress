@@ -12,6 +12,7 @@ import (
 	"github.com/thetechnick/nginx-ingress/pkg/config"
 	"github.com/thetechnick/nginx-ingress/pkg/errors"
 	"github.com/thetechnick/nginx-ingress/pkg/parser"
+	"github.com/thetechnick/nginx-ingress/pkg/renderer"
 	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 	"github.com/thetechnick/nginx-ingress/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,7 +25,7 @@ type IngressExParserMock struct {
 	mock.Mock
 }
 
-func (m *IngressExParserMock) Parse(c config.Config, ingEx *config.IngressEx) ([]*config.Server, error) {
+func (m *IngressExParserMock) Parse(c config.GlobalConfig, ingEx *config.IngressEx) ([]*config.Server, error) {
 	args := m.Called(c, ingEx)
 	return args.Get(0).([]*config.Server), args.Error(1)
 }
@@ -33,9 +34,9 @@ type ConfigMapParserMock struct {
 	mock.Mock
 }
 
-func (m *ConfigMapParserMock) Parse(cfgm *api_v1.ConfigMap) (*config.Config, error) {
+func (m *ConfigMapParserMock) Parse(cfgm *api_v1.ConfigMap) (*config.GlobalConfig, error) {
 	args := m.Called(cfgm)
-	return args.Get(0).(*config.Config), args.Error(1)
+	return args.Get(0).(*config.GlobalConfig), args.Error(1)
 }
 
 type CollisionHandlerMock struct {
@@ -60,8 +61,8 @@ type RendererMock struct {
 	mock.Mock
 }
 
-func (m *RendererMock) RenderMainConfig(controllerConfig *config.Config) (*pb.MainConfig, error) {
-	args := m.Called(controllerConfig)
+func (m *RendererMock) RenderMainConfig(cfg *renderer.MainConfigTemplateData) (*pb.MainConfig, error) {
+	args := m.Called(cfg)
 	return args.Get(0).(*pb.MainConfig), args.Error(1)
 }
 
@@ -93,7 +94,7 @@ func TestConfigurator(t *testing.T) {
 	var configMapParser *ConfigMapParserMock
 	var collisionHandler *CollisionHandlerMock
 	var ingressExStore *IngressExStoreMock
-	var renderer *RendererMock
+	var r *RendererMock
 	var recorder *RecorderMock
 	var c *configurator
 
@@ -139,7 +140,7 @@ func TestConfigurator(t *testing.T) {
 		configMapParser = &ConfigMapParserMock{}
 		collisionHandler = &CollisionHandlerMock{}
 		ingressExStore = &IngressExStoreMock{}
-		renderer = &RendererMock{}
+		r = &RendererMock{}
 		recorder = &RecorderMock{}
 		logger := log.New()
 		logger.SetLevel(log.DebugLevel)
@@ -151,7 +152,7 @@ func TestConfigurator(t *testing.T) {
 			configMapParser: configMapParser,
 			ch:              collisionHandler,
 			ingExStore:      ingressExStore,
-			configurator:    renderer,
+			configurator:    r,
 			recorder:        recorder,
 			log:             logger.WithField("test", "TestConfigurator"),
 		}
@@ -219,14 +220,14 @@ func TestConfigurator(t *testing.T) {
 		serverConfigStorage.On("ByIngressKey", "default/ing2").Return(scl, nil)
 		collisionHandler.On("Resolve", mergeList).Return(mergedList, nil)
 		serverConfigStorage.On("Delete", sc2).Return(nil)
-		renderer.On("RenderServerConfig", &mergedList[0]).Return(rendered, nil)
+		r.On("RenderServerConfig", &mergedList[0]).Return(rendered, nil)
 		serverConfigStorage.On("Put", rendered).Return(nil)
-		renderer.On("RenderMainConfig", mock.Anything).Return(nil, nil)
+		r.On("RenderMainConfig", mock.Anything).Return(nil, nil)
 
 		err := c.IngressUpdated("default/ing1")
 		assert.NoError(err)
 		serverConfigStorage.AssertCalled(t, "Delete", sc2)
-		renderer.AssertCalled(t, "RenderServerConfig", &mergedList[0])
+		r.AssertCalled(t, "RenderServerConfig", &mergedList[0])
 		serverConfigStorage.AssertCalled(t, "Put", rendered)
 	})
 
@@ -236,15 +237,16 @@ func TestConfigurator(t *testing.T) {
 		assert := assert.New(t)
 
 		nc := config.NewDefaultConfig()
+		mctd := renderer.MainConfigTemplateDataFromIngressConfig(nc)
 		mc := &pb.MainConfig{}
 		configMapParser.On("Parse", &cfgm).Return(nc, nil)
-		renderer.On("RenderMainConfig", nc).Return(mc, nil)
+		r.On("RenderMainConfig", mock.Anything).Return(mc, nil)
 		mainConfigStorage.On("Put", mc).Return(nil)
 
 		err := c.ConfigUpdated(&cfgm)
 		assert.NoError(err)
 		configMapParser.AssertCalled(t, "Parse", &cfgm)
-		renderer.AssertCalled(t, "RenderMainConfig", nc)
+		r.AssertCalled(t, "RenderMainConfig", mctd)
 		mainConfigStorage.AssertCalled(t, "Put", mc)
 	})
 
@@ -253,17 +255,18 @@ func TestConfigurator(t *testing.T) {
 		assert := assert.New(t)
 
 		nc := config.NewDefaultConfig()
+		mctd := renderer.MainConfigTemplateDataFromIngressConfig(nc)
 		mc := &pb.MainConfig{}
 		e := fmt.Errorf("test error")
 		configMapParser.On("Parse", &cfgm).Return(nc, errors.WrapInObjectContext(parser.ValidationError([]error{e}), &cfgm))
 		recorder.On("Event", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-		renderer.On("RenderMainConfig", mock.Anything).Return(mc, nil)
+		r.On("RenderMainConfig", mock.Anything).Return(mc, nil)
 		mainConfigStorage.On("Put", mc).Return(nil)
 
 		err := c.ConfigUpdated(&cfgm)
 		assert.NoError(err)
 		configMapParser.AssertCalled(t, "Parse", &cfgm)
-		renderer.AssertCalled(t, "RenderMainConfig", nc)
+		r.AssertCalled(t, "RenderMainConfig", mctd)
 		mainConfigStorage.AssertCalled(t, "Put", mc)
 		recorder.AssertCalled(t, "Event", &cfgm, api_v1.EventTypeWarning, "Config Error", mock.Anything)
 	})
