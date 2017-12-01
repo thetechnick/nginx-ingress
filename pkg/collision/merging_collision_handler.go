@@ -5,6 +5,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 
@@ -98,8 +99,28 @@ func (m *mergingCollisionHandler) mergeServers(base config.Server, merge *config
 		base.SSL = true
 		base.SSLCertificate = merge.SSLCertificate
 		base.SSLCertificateKey = merge.SSLCertificateKey
-		base.TLSCertificateFile = merge.TLSCertificateFile
 	}
+
+	// files
+	if len(merge.Files) > 0 {
+		filesMap := map[string]*pb.File{}
+		if base.Files == nil {
+			base.Files = []*pb.File{}
+		} else {
+			for _, file := range base.Files {
+				filesMap[file.Name] = file
+			}
+		}
+		for _, file := range merge.Files {
+			filesMap[file.Name] = file
+		}
+		files := []*pb.File{}
+		for _, file := range filesMap {
+			files = append(files, file)
+		}
+		base.Files = files
+	}
+
 	if merge.HTTP2 {
 		base.HTTP2 = true
 	}

@@ -21,7 +21,7 @@ type IngressParserMock struct {
 	mock.Mock
 }
 
-func (m *IngressParserMock) Parse(ingCfg config.GlobalConfig, ingEx *config.IngressEx, pems map[string]*pb.TLSCertificate) ([]*config.Server, error) {
+func (m *IngressParserMock) Parse(ingCfg config.GlobalConfig, ingEx *config.IngressEx, pems map[string]*pb.File) ([]*config.Server, error) {
 	args := m.Called(ingCfg, ingEx, pems)
 	return args.Get(0).([]*config.Server), args.Error(1)
 }
@@ -69,14 +69,14 @@ func TestIngressExParser(t *testing.T) {
 			},
 		}
 		mainConfig := config.GlobalConfig{}
-		tlsCerts := map[string]*pb.TLSCertificate{
-			"one.example.com": &pb.TLSCertificate{
+		tlsCerts := map[string]*pb.File{
+			"one.example.com": &pb.File{
 				Name:    path.Join(storage.CertificatesDir, "one.example.com.pem"),
 				Content: []byte{},
 			},
 		}
 		secretParserMock.On("Parse", mock.Anything).Return([]byte{}, nil)
-		ingressParserMock.On("Parse", mainConfig, ingEx, tlsCerts).Return([]*config.Server{}, nil)
+		ingressParserMock.On("Parse", mock.Anything, mock.Anything, mock.Anything).Return([]*config.Server{}, nil)
 
 		_, err := p.Parse(mainConfig, ingEx)
 		assert.NoError(err)
@@ -96,9 +96,8 @@ func TestIngressExParser(t *testing.T) {
 			Ingress: &ingress1,
 		}
 		mainConfig := config.GlobalConfig{}
-		tlsCerts := map[string]*pb.TLSCertificate{}
 		ingressParseError := errors.WrapInObjectContext(ValidationError([]error{}), ingEx.Ingress)
-		ingressParserMock.On("Parse", mainConfig, ingEx, tlsCerts).Return([]*config.Server{}, ingressParseError)
+		ingressParserMock.On("Parse", mock.Anything, mock.Anything, mock.Anything).Return([]*config.Server{}, ingressParseError)
 
 		_, err := p.Parse(mainConfig, ingEx)
 		if assert.Error(err) {

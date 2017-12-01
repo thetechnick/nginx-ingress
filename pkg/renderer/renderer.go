@@ -74,7 +74,7 @@ func (c *renderer) RenderServerConfig(mergedConfig *collision.MergedIngressConfi
 		Meta:   meta,
 		Name:   mergedConfig.Server.Name,
 		Config: buffer.Bytes(),
-		Tls:    mergedConfig.Server.TLSCertificateFile,
+		Files:  mergedConfig.Server.Files,
 	}
 	return s, nil
 }

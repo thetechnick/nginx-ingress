@@ -39,7 +39,7 @@ type ingressExParser struct {
 
 func (p *ingressExParser) Parse(mainConfig config.GlobalConfig, ingEx *config.IngressEx) ([]*config.Server, error) {
 	// TLS
-	tlsCerts := map[string]*pb.TLSCertificate{}
+	tlsCerts := map[string]*pb.File{}
 	for _, tls := range ingEx.Ingress.Spec.TLS {
 		secretName := tls.SecretName
 		secret, exist := ingEx.Secrets[secretName]
@@ -57,14 +57,14 @@ func (p *ingressExParser) Parse(mainConfig config.GlobalConfig, ingEx *config.In
 
 		for _, host := range tls.Hosts {
 			tlsName := path.Join(storage.CertificatesDir, fmt.Sprintf("%s.pem", host))
-			tlsCerts[host] = &pb.TLSCertificate{
+			tlsCerts[host] = &pb.File{
 				Name:    tlsName,
 				Content: tlsCert,
 			}
 		}
 		if len(tls.Hosts) == 0 {
 			tlsName := path.Join(storage.CertificatesDir, "default.pem")
-			tlsCerts[emptyHost] = &pb.TLSCertificate{
+			tlsCerts[emptyHost] = &pb.File{
 				Name:    tlsName,
 				Content: tlsCert,
 			}

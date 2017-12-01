@@ -59,6 +59,14 @@ func (s *localServerStorage) Put(cfg *pb.ServerConfig) error {
 		}
 	}
 
+	for _, file := range cfg.Files {
+		err = t.Update(file.Name, string(file.Content))
+		if err != nil {
+			t.Rollback()
+			return err
+		}
+	}
+
 	err = s.nginx.Reload()
 	if err != nil {
 		t.Rollback()

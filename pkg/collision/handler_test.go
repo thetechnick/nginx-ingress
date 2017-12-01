@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
@@ -58,6 +59,14 @@ var (
 		Name:      "one.example.com",
 		Upstreams: []config.Upstream{ingress2Upstream1},
 		Locations: []config.Location{ingress2Location1, ingress2Location2},
+		Files: []*pb.File{
+			&pb.File{
+				Name: "file1",
+			},
+			&pb.File{
+				Name: "file10",
+			},
+		},
 	}
 	ingress2Server2 = config.Server{
 		Name:      "two.example.com",
@@ -97,6 +106,14 @@ var (
 		HSTS:                  true,
 		HSTSMaxAge:            2000,
 		HSTSIncludeSubdomains: true,
+		Files: []*pb.File{
+			&pb.File{
+				Name: "file1",
+			},
+			&pb.File{
+				Name: "file2",
+			},
+		},
 	}
 	ingress3 = v1beta1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{

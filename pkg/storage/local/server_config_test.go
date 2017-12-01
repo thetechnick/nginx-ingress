@@ -67,6 +67,12 @@ func TestServerConfigStorage(t *testing.T) {
 			Name:    "/etc/nginx/ssl/test.pem",
 			Content: []byte("\n"),
 		},
+		Files: []*pb.File{
+			&pb.File{
+				Name:    "/etc/nginx/cert.pem",
+				Content: []byte("cert"),
+			},
+		},
 	}
 
 	var cm *localServerStorage
@@ -89,8 +95,7 @@ func TestServerConfigStorage(t *testing.T) {
 		assert := assert.New(t)
 
 		nginxMock.On("Reload").Return(nil)
-		transactionMock.On("Update", "/etc/nginx/conf.d/test.conf", "").Return(nil)
-		transactionMock.On("Update", "/etc/nginx/ssl/test.pem", "\n").Return(nil)
+		transactionMock.On("Update", mock.Anything, mock.Anything).Return(nil)
 		transactionMock.On("Apply")
 
 		err := cm.Put(exampleServerConfig)
@@ -102,7 +107,8 @@ func TestServerConfigStorage(t *testing.T) {
 
 			transactionMock.AssertCalled(t, "Update", "/etc/nginx/conf.d/test.conf", "")
 			transactionMock.AssertCalled(t, "Update", "/etc/nginx/ssl/test.pem", "\n")
-			transactionMock.AssertNumberOfCalls(t, "Update", 2)
+			transactionMock.AssertCalled(t, "Update", "/etc/nginx/cert.pem", "cert")
+			transactionMock.AssertNumberOfCalls(t, "Update", 3)
 
 			transactionMock.AssertCalled(t, "Apply")
 			transactionMock.AssertNumberOfCalls(t, "Apply", 1)

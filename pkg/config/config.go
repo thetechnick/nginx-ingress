@@ -57,7 +57,7 @@ type Server struct {
 	SetRealIPFrom   []string
 	RealIPRecursive bool
 
-	TLSCertificateFile *pb.TLSCertificate
+	Files []*pb.File
 }
 
 // Location describes an NGINX location

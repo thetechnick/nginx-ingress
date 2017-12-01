@@ -49,8 +49,8 @@ func TestIngressParser(t *testing.T) {
 			Endpoints: map[string][]string{
 				"svc19000": []string{"8.8.8.8:9000"},
 			},
-		}, map[string]*pb.TLSCertificate{
-			"one.example.com": &pb.TLSCertificate{
+		}, map[string]*pb.File{
+			"one.example.com": &pb.File{
 				Name: "ssl/one.example.com",
 			},
 		})
@@ -111,8 +111,8 @@ func TestIngressParser(t *testing.T) {
 			Endpoints: map[string][]string{
 				"svc19000": []string{"8.8.8.8:9000"},
 			},
-		}, map[string]*pb.TLSCertificate{
-			"one.example.com": &pb.TLSCertificate{
+		}, map[string]*pb.File{
+			"one.example.com": &pb.File{
 				Name: "ssl/one.example.com",
 			},
 		})

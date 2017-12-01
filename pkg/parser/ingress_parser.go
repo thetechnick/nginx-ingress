@@ -26,7 +26,7 @@ func (e *IngressAnnotationError) Error() string {
 
 // IngressParser parses ingress objects
 type IngressParser interface {
-	Parse(ingCfg config.GlobalConfig, ingEx *config.IngressEx, pems map[string]*pb.TLSCertificate) ([]*config.Server, error)
+	Parse(ingCfg config.GlobalConfig, ingEx *config.IngressEx, pems map[string]*pb.File) ([]*config.Server, error)
 }
 
 // NewIngressParser returns a new IngressParser instance
@@ -36,7 +36,7 @@ func NewIngressParser() IngressParser {
 
 type ingressParser struct{}
 
-func (p *ingressParser) Parse(ingCfg config.GlobalConfig, ingEx *config.IngressEx, pems map[string]*pb.TLSCertificate) ([]*config.Server, error) {
+func (p *ingressParser) Parse(ingCfg config.GlobalConfig, ingEx *config.IngressEx, pems map[string]*pb.File) ([]*config.Server, error) {
 	ing := ingEx.Ingress
 	errs := []error{}
 	if serverTokens, exists, err := util.GetMapKeyAsBool(ing.Annotations, "nginx.org/server-tokens"); exists {
@@ -204,13 +204,14 @@ func (p *ingressParser) Parse(ingCfg config.GlobalConfig, ingEx *config.IngressE
 			ProxyHideHeaders:      ingCfg.ProxyHideHeaders,
 			ProxyPassHeaders:      ingCfg.ProxyPassHeaders,
 			ServerSnippets:        ingCfg.ServerSnippets,
+			Files:                 []*pb.File{},
 		}
 
 		if pemFile, ok := pems[serverName]; ok {
 			server.SSL = true
 			server.SSLCertificate = pemFile.Name
 			server.SSLCertificateKey = pemFile.Name
-			server.TLSCertificateFile = pemFile
+			server.Files = append(server.Files, pemFile)
 		}
 
 		servers = append(servers, &server)
@@ -241,13 +242,14 @@ func (p *ingressParser) Parse(ingCfg config.GlobalConfig, ingEx *config.IngressE
 			ProxyHideHeaders:      ingCfg.ProxyHideHeaders,
 			ProxyPassHeaders:      ingCfg.ProxyPassHeaders,
 			ServerSnippets:        ingCfg.ServerSnippets,
+			Files:                 []*pb.File{},
 		}
 
 		if pemFile, ok := pems[emptyHost]; ok {
 			server.SSL = true
 			server.SSLCertificate = pemFile.Name
 			server.SSLCertificateKey = pemFile.Name
-			server.TLSCertificateFile = pemFile
+			server.Files = append(server.Files, pemFile)
 		}
 
 		servers = append(servers, &server)
