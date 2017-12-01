@@ -166,7 +166,10 @@ func (p *ingressParser) Parse(ingCfg config.Config, ingEx *config.IngressEx, pem
 			upsName := getNameForUpstream(ing, rule.Host, path.Backend.ServiceName)
 
 			if _, exists := upstreams[upsName]; !exists {
-				upstream := createUpstream(ingEx, upsName, &path.Backend, ing.Namespace)
+				upstream, err := createUpstream(ingEx, upsName, &path.Backend, ing.Namespace)
+				if err != nil {
+					errs = append(errs, err)
+				}
 				upstreams[upsName] = upstream
 			}
 
@@ -215,7 +218,10 @@ func (p *ingressParser) Parse(ingCfg config.Config, ingEx *config.IngressEx, pem
 
 	if len(ing.Spec.Rules) == 0 && ing.Spec.Backend != nil {
 		upsName := getNameForUpstream(ing, emptyHost, ing.Spec.Backend.ServiceName)
-		upstream := createUpstream(ingEx, upsName, ing.Spec.Backend, ing.Namespace)
+		upstream, err := createUpstream(ingEx, upsName, ing.Spec.Backend, ing.Namespace)
+		if err != nil {
+			errs = append(errs, err)
+		}
 		location := config.CreateLocation(pathOrDefault("/"), upstream, &ingCfg, wsServices[ing.Spec.Backend.ServiceName], rewrites[ing.Spec.Backend.ServiceName], sslServices[ing.Spec.Backend.ServiceName])
 
 		server := config.Server{
@@ -324,11 +330,10 @@ func getSSLServices(ing *extensions.Ingress) map[string]bool {
 	return sslServices
 }
 
-func createUpstream(ingEx *config.IngressEx, name string, backend *extensions.IngressBackend, namespace string) config.Upstream {
+func createUpstream(ingEx *config.IngressEx, name string, backend *extensions.IngressBackend, namespace string) (config.Upstream, error) {
 	ups := config.NewUpstreamWithDefaultServer(name)
 
-	endps, exists := ingEx.Endpoints[backend.ServiceName+backend.ServicePort.String()]
-	if exists {
+	if endps, exists := ingEx.Endpoints[backend.ServiceName+backend.ServicePort.String()]; exists {
 		var upsServers []config.UpstreamServer
 		for _, endp := range endps {
 			addressport := strings.Split(endp, ":")
@@ -337,12 +342,20 @@ func createUpstream(ingEx *config.IngressEx, name string, backend *extensions.In
 				Port:    addressport[1],
 			})
 		}
+
 		if len(upsServers) > 0 {
+			// override default upstream
 			ups.UpstreamServers = upsServers
+			return ups, nil
 		}
 	}
 
-	return ups
+	return ups, fmt.Errorf(
+		"no active endpoints for service:port %s/%s:%s",
+		ingEx.Ingress.Namespace,
+		backend.ServiceName,
+		backend.ServicePort.String(),
+	)
 }
 
 func upstreamMapToList(upstreams map[string]config.Upstream) (result []config.Upstream) {
