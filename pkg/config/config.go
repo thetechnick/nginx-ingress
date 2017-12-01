@@ -105,9 +105,3 @@ func CreateLocation(path string, upstream Upstream, cfg *GlobalConfig, websocket
 
 	return loc
 }
-
-// CertificatePair describes a key and certificate pair
-type CertificatePair struct {
-	Key         []byte
-	Certificate []byte
-}
