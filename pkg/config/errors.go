@@ -1,9 +1,19 @@
-package parser
+package config
 
 import (
 	"fmt"
 	"strings"
 )
+
+// IngressAnnotationError is a config error for annotation of the Ingress object
+type IngressAnnotationError struct {
+	Annotation      string
+	ValidationError error
+}
+
+func (e *IngressAnnotationError) Error() string {
+	return fmt.Sprintf("Skipping annotation %q: %v", e.Annotation, e.ValidationError)
+}
 
 // ValidationError packs multiple validation errors into a single error
 type ValidationError []error

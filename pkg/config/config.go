@@ -35,14 +35,17 @@ type UpstreamServer struct {
 
 // Server describes an NGINX server
 type Server struct {
+	Name              string
+	Locations         []Location
+	Upstreams         []Upstream
+	SSL               bool
+	SSLCertificate    string
+	SSLCertificateKey string
+	Files             []*pb.File
+
+	// settings/annotations
 	ServerSnippets        []string
-	Name                  string
 	ServerTokens          bool
-	Locations             []Location
-	Upstreams             []Upstream
-	SSL                   bool
-	SSLCertificate        string
-	SSLCertificateKey     string
 	HTTP2                 bool
 	RedirectToHTTPS       bool
 	ProxyProtocol         bool
@@ -56,8 +59,26 @@ type Server struct {
 	RealIPHeader    string
 	SetRealIPFrom   []string
 	RealIPRecursive bool
+}
 
-	Files []*pb.File
+// CreateServerConfig creates a new server config from the given params
+func CreateServerConfig(gCfg *GlobalConfig, ingCfg *IngressConfig) *Server {
+	return &Server{
+		ServerTokens:          defaultBool(gCfg.ServerTokens, ingCfg.ServerTokens),
+		HTTP2:                 defaultBool(gCfg.HTTP2, ingCfg.HTTP2),
+		RedirectToHTTPS:       defaultBool(gCfg.RedirectToHTTPS, ingCfg.RedirectToHTTPS),
+		ProxyProtocol:         defaultBool(gCfg.ProxyProtocol, ingCfg.ProxyProtocol),
+		HSTS:                  defaultBool(gCfg.HSTS, ingCfg.HSTS),
+		HSTSMaxAge:            defaultInt64(gCfg.HSTSMaxAge, ingCfg.HSTSMaxAge),
+		HSTSIncludeSubdomains: defaultBool(gCfg.HSTSIncludeSubdomains, ingCfg.HSTSIncludeSubdomains),
+		RealIPHeader:          defaultString(gCfg.RealIPHeader, ingCfg.RealIPHeader),
+		SetRealIPFrom:         defaultStringSlice(gCfg.SetRealIPFrom, ingCfg.SetRealIPFrom),
+		RealIPRecursive:       defaultBool(gCfg.RealIPRecursive, ingCfg.RealIPRecursive),
+		ProxyHideHeaders:      defaultStringSlice(gCfg.ProxyHideHeaders, ingCfg.ProxyHideHeaders),
+		ProxyPassHeaders:      defaultStringSlice(gCfg.ProxyPassHeaders, ingCfg.ProxyPassHeaders),
+		ServerSnippets:        defaultStringSlice(gCfg.ServerSnippets, ingCfg.ServerSnippets),
+		Files:                 []*pb.File{},
+	}
 }
 
 // Location describes an NGINX location
@@ -86,22 +107,59 @@ type IngressEx struct {
 }
 
 // CreateLocation creates a new location from the given params
-func CreateLocation(path string, upstream Upstream, cfg *GlobalConfig, websocket bool, rewrite string, ssl bool) Location {
+func CreateLocation(
+	path string,
+	upstream Upstream,
+	gCfg *GlobalConfig,
+	ingCfg *IngressConfig,
+	websocket bool,
+	rewrite string,
+	ssl bool,
+) Location {
 	loc := Location{
-		Path:                 path,
-		Upstream:             upstream,
-		ProxyConnectTimeout:  cfg.ProxyConnectTimeout,
-		ProxyReadTimeout:     cfg.ProxyReadTimeout,
-		ClientMaxBodySize:    cfg.ClientMaxBodySize,
-		Websocket:            websocket,
-		Rewrite:              rewrite,
-		SSL:                  ssl,
-		ProxyBuffering:       cfg.ProxyBuffering,
-		ProxyBuffers:         cfg.ProxyBuffers,
-		ProxyBufferSize:      cfg.ProxyBufferSize,
-		ProxyMaxTempFileSize: cfg.ProxyMaxTempFileSize,
-		LocationSnippets:     cfg.LocationSnippets,
+		Path:      path,
+		Upstream:  upstream,
+		Websocket: websocket,
+		Rewrite:   rewrite,
+		SSL:       ssl,
+
+		ProxyConnectTimeout:  defaultString(gCfg.ProxyConnectTimeout, ingCfg.ProxyConnectTimeout),
+		ProxyReadTimeout:     defaultString(gCfg.ProxyReadTimeout, ingCfg.ProxyReadTimeout),
+		ClientMaxBodySize:    defaultString(gCfg.ClientMaxBodySize, ingCfg.ClientMaxBodySize),
+		ProxyBuffering:       defaultBool(gCfg.ProxyBuffering, ingCfg.ProxyBuffering),
+		ProxyBuffers:         defaultString(gCfg.ProxyBuffers, ingCfg.ProxyBuffers),
+		ProxyBufferSize:      defaultString(gCfg.ProxyBufferSize, ingCfg.ProxyBufferSize),
+		ProxyMaxTempFileSize: defaultString(gCfg.ProxyMaxTempFileSize, ingCfg.ProxyMaxTempFileSize),
+		LocationSnippets:     defaultStringSlice(gCfg.LocationSnippets, ingCfg.LocationSnippets),
 	}
 
 	return loc
+}
+
+func defaultString(d string, override *string) string {
+	if override != nil {
+		return *override
+	}
+	return d
+}
+
+func defaultBool(d bool, override *bool) bool {
+	if override != nil {
+		return *override
+	}
+	return d
+}
+
+func defaultStringSlice(d []string, override []string) []string {
+	if override != nil {
+		return override
+	}
+	return d
+}
+
+func defaultInt64(d int64, override *int64) int64 {
+	if override != nil {
+		return *override
+	}
+	return d
 }

@@ -1,10 +1,9 @@
-package parser
+package config
 
 import (
 	"fmt"
 	"strings"
 
-	"github.com/thetechnick/nginx-ingress/pkg/config"
 	"github.com/thetechnick/nginx-ingress/pkg/errors"
 	"github.com/thetechnick/nginx-ingress/pkg/util"
 	api_v1 "k8s.io/client-go/pkg/api/v1"
@@ -22,7 +21,7 @@ func (e *ConfigMapKeyError) Error() string {
 
 // ConfigMapParser parses the server config from a ConfigMap
 type ConfigMapParser interface {
-	Parse(cfgm *api_v1.ConfigMap) (*config.GlobalConfig, error)
+	Parse(cfgm *api_v1.ConfigMap) (*GlobalConfig, error)
 }
 
 // NewConfigMapParser returns a new ConfigMapParser
@@ -32,9 +31,9 @@ func NewConfigMapParser() ConfigMapParser {
 
 type configMapParser struct{}
 
-func (p *configMapParser) Parse(cfgm *api_v1.ConfigMap) (*config.GlobalConfig, error) {
+func (p *configMapParser) Parse(cfgm *api_v1.ConfigMap) (*GlobalConfig, error) {
 	errs := []error{}
-	cfg := config.NewDefaultConfig()
+	cfg := NewDefaultConfig()
 
 	// No validator/parser
 	if clientMaxBodySize, exists := cfgm.Data["client-max-body-size"]; exists {

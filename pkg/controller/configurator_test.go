@@ -11,7 +11,6 @@ import (
 	"github.com/thetechnick/nginx-ingress/pkg/collision"
 	"github.com/thetechnick/nginx-ingress/pkg/config"
 	"github.com/thetechnick/nginx-ingress/pkg/errors"
-	"github.com/thetechnick/nginx-ingress/pkg/parser"
 	"github.com/thetechnick/nginx-ingress/pkg/renderer"
 	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 	"github.com/thetechnick/nginx-ingress/pkg/test"
@@ -48,13 +47,31 @@ func (m *CollisionHandlerMock) Resolve(mergeList collision.MergeList) (updated [
 	return args.Get(0).([]collision.MergedIngressConfig), args.Error(1)
 }
 
-type IngressExStoreMock struct {
+type IngressAccessorMock struct {
 	mock.Mock
 }
 
-func (m *IngressExStoreMock) GetIngressEx(ingKey string) (*config.IngressEx, error) {
+func (m *IngressAccessorMock) GetByKey(ingKey string) (*v1beta1.Ingress, error) {
 	args := m.Called(ingKey)
-	return args.Get(0).(*config.IngressEx), args.Error(1)
+	return args.Get(0).(*v1beta1.Ingress), args.Error(1)
+}
+
+type SecretAccessorMock struct {
+	mock.Mock
+}
+
+func (m *SecretAccessorMock) Get(namespace, name string) (*api_v1.Secret, error) {
+	args := m.Called(namespace, name)
+	return args.Get(0).(*api_v1.Secret), args.Error(1)
+}
+
+type EndpointsAccessorMock struct {
+	mock.Mock
+}
+
+func (m *EndpointsAccessorMock) GetEndpointsForIngressBackend(backend *v1beta1.IngressBackend, namespace string) ([]string, error) {
+	args := m.Called(backend, namespace)
+	return args.Get(0).([]string), args.Error(1)
 }
 
 type RendererMock struct {
@@ -69,6 +86,38 @@ func (m *RendererMock) RenderMainConfig(cfg *renderer.MainConfigTemplateData) (*
 func (m *RendererMock) RenderServerConfig(mergedConfig *collision.MergedIngressConfig) (*pb.ServerConfig, error) {
 	args := m.Called(mergedConfig)
 	return args.Get(0).(*pb.ServerConfig), args.Error(1)
+}
+
+type SecretParserMock struct {
+	mock.Mock
+}
+
+func (m *SecretParserMock) Parse(secret *api_v1.Secret) ([]byte, error) {
+	args := m.Called(secret)
+	return args.Get(0).([]byte), args.Error(1)
+}
+
+type IngressConfigParserMock struct {
+	mock.Mock
+}
+
+func (m *IngressConfigParserMock) Parse(ingress *v1beta1.Ingress) (ingCfg *config.IngressConfig, warning, err error) {
+	args := m.Called(ingress)
+	return args.Get(0).(*config.IngressConfig), args.Error(1), args.Error(2)
+}
+
+type ServerConfigParserMock struct {
+	mock.Mock
+}
+
+func (m *ServerConfigParserMock) Parse(
+	gCfg config.GlobalConfig,
+	ingCfg config.IngressConfig,
+	tlsCerts map[string]*pb.File,
+	endpoints map[string][]string,
+) (servers []*config.Server, warning, err error) {
+	args := m.Called(gCfg, ingCfg, tlsCerts, endpoints)
+	return args.Get(0).([]*config.Server), args.Error(1), args.Error(2)
 }
 
 type RecorderMock struct {
@@ -90,10 +139,17 @@ func (m *RecorderMock) PastEventf(object runtime.Object, timestamp metav1.Time, 
 func TestConfigurator(t *testing.T) {
 	var serverConfigStorage *test.ServerConfigStorageMock
 	var mainConfigStorage *test.MainConfigStorageMock
-	var ingressExParser *IngressExParserMock
+
+	var ingressAccessor *IngressAccessorMock
+	var secretAccessor *SecretAccessorMock
+	var endpointsAccessor *EndpointsAccessorMock
+
+	var tlsSecretParser *SecretParserMock
 	var configMapParser *ConfigMapParserMock
+	var ingressConfigParser *IngressConfigParserMock
+	var serverConfigParser *ServerConfigParserMock
+
 	var collisionHandler *CollisionHandlerMock
-	var ingressExStore *IngressExStoreMock
 	var r *RendererMock
 	var recorder *RecorderMock
 	var c *configurator
@@ -136,25 +192,37 @@ func TestConfigurator(t *testing.T) {
 	beforeEach := func() {
 		serverConfigStorage = &test.ServerConfigStorageMock{}
 		mainConfigStorage = &test.MainConfigStorageMock{}
-		ingressExParser = &IngressExParserMock{}
+		ingressAccessor = &IngressAccessorMock{}
+		secretAccessor = &SecretAccessorMock{}
+		endpointsAccessor = &EndpointsAccessorMock{}
+		tlsSecretParser = &SecretParserMock{}
+		serverConfigParser = &ServerConfigParserMock{}
+		ingressConfigParser = &IngressConfigParserMock{}
+
 		configMapParser = &ConfigMapParserMock{}
 		collisionHandler = &CollisionHandlerMock{}
-		ingressExStore = &IngressExStoreMock{}
 		r = &RendererMock{}
 		recorder = &RecorderMock{}
 		logger := log.New()
 		logger.SetLevel(log.DebugLevel)
 
 		c = &configurator{
-			scs:             serverConfigStorage,
-			mcs:             mainConfigStorage,
-			ingExParser:     ingressExParser,
-			configMapParser: configMapParser,
-			ch:              collisionHandler,
-			ingExStore:      ingressExStore,
-			configurator:    r,
-			recorder:        recorder,
-			log:             logger.WithField("test", "TestConfigurator"),
+			scs: serverConfigStorage,
+			mcs: mainConfigStorage,
+
+			ingressAccessor:   ingressAccessor,
+			secretAccessor:    secretAccessor,
+			endpointsAccessor: endpointsAccessor,
+
+			configMapParser:    configMapParser,
+			tlsSecretParser:    tlsSecretParser,
+			ingParser:          ingressConfigParser,
+			serverConfigParser: serverConfigParser,
+
+			ch:           collisionHandler,
+			configurator: r,
+			recorder:     recorder,
+			log:          logger.WithField("test", "TestConfigurator"),
 		}
 	}
 
@@ -210,14 +278,20 @@ func TestConfigurator(t *testing.T) {
 			Name: "one.example.com",
 		}
 
-		ingressExStore.On("GetIngressEx", "default/ing1").Return(&ingEx1, nil)
-		ingressExStore.On("GetIngressEx", "default/ing2").Return(&ingEx2, nil)
-		ingressExParser.On("Parse", *c.mainConfig, &ingEx1).Return(servers, nil)
-		ingressExParser.On("Parse", *c.mainConfig, &ingEx2).Return(servers, nil)
+		ingressAccessor.On("GetByKey", "default/ing1").Return(&ingress1, nil)
+		ingressAccessor.On("GetByKey", "default/ing2").Return(&ingress2, nil)
+		ingressConfigParser.On("Parse", &ingress1).Return(&config.IngressConfig{
+			Ingress: &ingress1,
+		}, nil, nil)
+		ingressConfigParser.On("Parse", &ingress2).Return(&config.IngressConfig{
+			Ingress: &ingress2,
+		}, nil, nil)
+
 		serverConfigStorage.On("Get", "one.example.com").Return(sc1, nil)
 		serverConfigStorage.On("List").Return(scl, nil)
 		serverConfigStorage.On("ByIngressKey", "default/ing1").Return([]*pb.ServerConfig{}, nil)
 		serverConfigStorage.On("ByIngressKey", "default/ing2").Return(scl, nil)
+		serverConfigParser.On("Parse", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(servers, nil, nil)
 		collisionHandler.On("Resolve", mergeList).Return(mergedList, nil)
 		serverConfigStorage.On("Delete", sc2).Return(nil)
 		r.On("RenderServerConfig", &mergedList[0]).Return(rendered, nil)
@@ -258,7 +332,7 @@ func TestConfigurator(t *testing.T) {
 		mctd := renderer.MainConfigTemplateDataFromIngressConfig(nc)
 		mc := &pb.MainConfig{}
 		e := fmt.Errorf("test error")
-		configMapParser.On("Parse", &cfgm).Return(nc, errors.WrapInObjectContext(parser.ValidationError([]error{e}), &cfgm))
+		configMapParser.On("Parse", &cfgm).Return(nc, errors.WrapInObjectContext(config.ValidationError([]error{e}), &cfgm))
 		recorder.On("Event", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 		r.On("RenderMainConfig", mock.Anything).Return(mc, nil)
 		mainConfigStorage.On("Put", mc).Return(nil)

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"path"
 	"strings"
 	"sync"
 
@@ -9,11 +10,12 @@ import (
 	"github.com/thetechnick/nginx-ingress/pkg/collision"
 	"github.com/thetechnick/nginx-ingress/pkg/config"
 	"github.com/thetechnick/nginx-ingress/pkg/errors"
-	"github.com/thetechnick/nginx-ingress/pkg/parser"
 	"github.com/thetechnick/nginx-ingress/pkg/renderer"
 	"github.com/thetechnick/nginx-ingress/pkg/storage"
 	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
+	api_errors "k8s.io/apimachinery/pkg/api/errors"
 	api_v1 "k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	"k8s.io/client-go/tools/record"
 )
 
@@ -26,36 +28,55 @@ type Configurator interface {
 
 // NewConfigurator creates a new Configurator instance
 func NewConfigurator(
-	ingExStore IngressExStore,
+	ingressAccessor IngressAccessor,
+	secretAccessor SecretAccessor,
+	endpointsAccessor EndpointsAccessor,
+
 	recorder record.EventRecorder,
 	mcs storage.MainConfigStorage,
 	scs storage.ServerConfigStorage,
 ) Configurator {
 	return &configurator{
-		scs:             scs,
-		mcs:             mcs,
-		ingExParser:     parser.NewIngressExParser(),
-		configMapParser: parser.NewConfigMapParser(),
-		ch:              collision.NewMergingCollisionHandler(),
-		ingExStore:      ingExStore,
-		configurator:    renderer.NewRenderer(),
-		recorder:        recorder,
-		log:             log.WithField("module", "Configurator"),
+		scs: scs,
+		mcs: mcs,
+
+		ingressAccessor:   ingressAccessor,
+		secretAccessor:    secretAccessor,
+		endpointsAccessor: endpointsAccessor,
+
+		ingParser:          config.NewIngressConfigParser(),
+		tlsSecretParser:    config.NewSecretParser(),
+		configMapParser:    config.NewConfigMapParser(),
+		serverConfigParser: config.NewServerConfigParser(),
+
+		ch:           collision.NewMergingCollisionHandler(),
+		configurator: renderer.NewRenderer(),
+		recorder:     recorder,
+		log:          log.WithField("module", "Configurator"),
 	}
 }
 
 type configurator struct {
-	mainConfig      *config.GlobalConfig
-	mcs             storage.MainConfigStorage
-	scs             storage.ServerConfigStorage
-	ingExParser     parser.IngressExParser
-	configMapParser parser.ConfigMapParser
-	ch              collision.Handler
-	ingExStore      IngressExStore
-	configurator    renderer.Renderer
-	mutex           sync.Mutex
-	recorder        record.EventRecorder
-	log             *log.Entry
+	log        *log.Entry
+	mainConfig *config.GlobalConfig
+	mutex      sync.Mutex
+
+	mcs storage.MainConfigStorage
+	scs storage.ServerConfigStorage
+
+	// k8s accessors
+	ingressAccessor   IngressAccessor
+	secretAccessor    SecretAccessor
+	endpointsAccessor EndpointsAccessor
+
+	tlsSecretParser    config.SecretParser
+	ingParser          config.IngressConfigParser
+	configMapParser    config.ConfigMapParser
+	serverConfigParser config.ServerConfigParser
+
+	ch           collision.Handler
+	configurator renderer.Renderer
+	recorder     record.EventRecorder
 }
 
 func (c *configurator) ConfigUpdated(cfgm *api_v1.ConfigMap) error {
@@ -93,20 +114,6 @@ func involvedIngressObjects(serverConfigs []*pb.ServerConfig) map[string]bool {
 		}
 	}
 	return ingressObjects
-}
-
-func (c *configurator) parseServerConfig(ingEx *config.IngressEx) ([]*config.Server, error) {
-	if ingEx == nil {
-		return []*config.Server{}, nil
-	}
-	servers, err := c.ingExParser.Parse(*c.mainConfig, ingEx)
-	if err != nil {
-		c.recordError("Config Error", err)
-		if servers == nil {
-			return nil, err
-		}
-	}
-	return servers, nil
 }
 
 func mapFromServerList(servers []*pb.ServerConfig) map[string]*pb.ServerConfig {
@@ -184,7 +191,7 @@ func (c *configurator) recordError(reason string, err error) {
 		return
 	}
 
-	if werr, ok := cerr.WrappedError().(parser.ValidationError); !ok {
+	if werr, ok := cerr.WrappedError().(config.ValidationError); !ok {
 		for _, e := range werr {
 			c.recorder.Event(cerr.Object(), api_v1.EventTypeWarning, reason, e.Error())
 		}
@@ -196,6 +203,98 @@ func (c *configurator) recordError(reason string, err error) {
 		reason,
 		cerr.Error(),
 	)
+}
+
+func (c *configurator) serverConfigForIngressKey(ingressKey string) (
+	ingress *v1beta1.Ingress,
+	servers []*config.Server,
+	err error,
+) {
+	ingress, err = c.ingressAccessor.GetByKey(ingressKey)
+	if err != nil {
+		if api_errors.IsNotFound(err) {
+			return nil, nil, nil
+		}
+		return
+	}
+	ingressCfg, warning, cfgErr := c.ingParser.Parse(ingress)
+	if warning != nil {
+		c.recordError("Config Warnings", warning)
+	}
+	if cfgErr != nil {
+		err = cfgErr
+		return
+	}
+
+	// get secrets
+	tlsSecrets := map[string]*pb.File{}
+	for _, tls := range ingress.Spec.TLS {
+		var secret *api_v1.Secret
+		if secret, err = c.secretAccessor.Get(ingress.Namespace, tls.SecretName); err != nil {
+			return
+		}
+
+		var tlsCert []byte
+		if tlsCert, err = c.tlsSecretParser.Parse(secret); err != nil {
+			return
+		}
+
+		for _, host := range tls.Hosts {
+			tlsName := path.Join(storage.CertificatesDir, fmt.Sprintf("%s.pem", host))
+			tlsSecrets[host] = &pb.File{
+				Name:    tlsName,
+				Content: tlsCert,
+			}
+		}
+		if len(tls.Hosts) == 0 {
+			tlsName := path.Join(storage.CertificatesDir, "default.pem")
+			tlsSecrets[config.EmptyHost] = &pb.File{
+				Name:    tlsName,
+				Content: tlsCert,
+			}
+		}
+	}
+
+	// get endpoints
+	endpoints := map[string][]string{}
+	if ingress.Spec.Backend != nil {
+		endps, gerr := c.endpointsAccessor.GetEndpointsForIngressBackend(ingress.Spec.Backend, ingress.Namespace)
+		if gerr != nil {
+			c.log.
+				WithField("namespace", ingress.Namespace).
+				WithField("name", ingress.Name).
+				WithError(gerr).
+				Errorf("Error retrieving endpoints for ingress backend: %v", ingress.Spec.Backend.ServiceName)
+		} else {
+			endpoints[ingress.Spec.Backend.ServiceName+ingress.Spec.Backend.ServicePort.String()] = endps
+		}
+	}
+	for _, rule := range ingress.Spec.Rules {
+		if rule.IngressRuleValue.HTTP == nil {
+			continue
+		}
+
+		for _, path := range rule.HTTP.Paths {
+			endps, gerr := c.endpointsAccessor.GetEndpointsForIngressBackend(&path.Backend, ingress.Namespace)
+			if gerr != nil {
+				log.
+					WithField("namespace", ingress.Namespace).
+					WithField("name", ingress.Name).
+					WithError(gerr).
+					Errorf("Error retrieving endpoints for ingress backend: %v", path.Backend.ServiceName)
+			} else {
+				endpoints[path.Backend.ServiceName+path.Backend.ServicePort.String()] = endps
+			}
+		}
+	}
+
+	mainCfg := *c.mainConfig
+	var scWarning error
+	servers, scWarning, err = c.serverConfigParser.Parse(mainCfg, *ingressCfg, tlsSecrets, endpoints)
+	if scWarning != nil {
+		c.recordError("Config Warning", scWarning)
+	}
+	return
 }
 
 func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
@@ -216,22 +315,17 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 	mergeList := collision.MergeList{}
 
 	// First Ingress/Updated Ingress
-	updatedIngEx, err := c.ingExStore.GetIngressEx(updatedIngressKey)
+	updatedIngress, updatedServers, err := c.serverConfigForIngressKey(updatedIngressKey)
 	if err != nil {
 		c.recordError("Config Error", err)
 		return
 	}
-	if updatedIngEx != nil {
+
+	if updatedIngress != nil {
 		c.log.
 			WithField("ingress", updatedIngressKey).
 			Info("updating")
 
-		var updatedServers []*config.Server
-		updatedServers, err = c.parseServerConfig(updatedIngEx)
-		if err != nil {
-			c.recordError("Error parsing server config", err)
-			return err
-		}
 		for _, server := range updatedServers {
 			if _, ok := updated[updatedIngressKey]; !ok {
 				updated[updatedIngressKey] = map[string]bool{}
@@ -241,7 +335,7 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 		}
 
 		mergeList = append(mergeList, collision.IngressConfig{
-			Ingress: updatedIngEx.Ingress,
+			Ingress: updatedIngress,
 			Servers: updatedServers,
 		})
 	} else {
@@ -263,19 +357,14 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 				continue
 			}
 
-			ingEx, gerr := c.ingExStore.GetIngressEx(ingressKey)
+			ing, servers, gerr := c.serverConfigForIngressKey(ingressKey)
 			if gerr != nil {
 				return gerr
 			}
-			if ingEx == nil {
+			if ing == nil {
 				continue
 			}
 
-			servers, perr := c.parseServerConfig(ingEx)
-			if perr != nil {
-				c.recordError(fmt.Sprintf("Error parsing dependency of \"%s\"", ingressKey), perr)
-				return perr
-			}
 			for _, server := range servers {
 				if _, ok := updated[ingressKey]; !ok {
 					updated[ingressKey] = map[string]bool{}
@@ -285,7 +374,7 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 
 			if len(servers) > 0 {
 				mergeList = append(mergeList, collision.IngressConfig{
-					Ingress: ingEx.Ingress,
+					Ingress: ing,
 					Servers: servers,
 				})
 			}
@@ -343,17 +432,4 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 	}
 
 	return nil
-}
-
-func (c *configurator) getExistingServerConfigsAsMap() (map[string]*pb.ServerConfig, error) {
-	existingConfigs, err := c.scs.List()
-	if err != nil {
-		return nil, err
-	}
-
-	existingMap := map[string]*pb.ServerConfig{}
-	for _, existingConfig := range existingConfigs {
-		existingMap[existingConfig.Name] = existingConfig
-	}
-	return existingMap, nil
 }

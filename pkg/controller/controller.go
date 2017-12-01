@@ -88,7 +88,10 @@ func NewLoadBalancerController(
 	}
 
 	lbc.configurator = NewConfigurator(
-		&IngressExStoreFunc{lbc.getIngressEx},
+		&ingressAccessorFuncs{lbc.getIngressByKey},
+		&secretAccessorFuncs{lbc.getSecret},
+		&endpointsAccessorFuncs{lbc.getEndpointsForIngressBackend},
+
 		eventBroadcaster.NewRecorder(scheme.Scheme, api_v1.EventSource{Component: "ingress-controller"}),
 		mcs,
 		scs,
@@ -395,6 +398,27 @@ func (lbc *LoadBalancerController) syncIng(key string) {
 		lbc.ingQueue.RequeueAfter(key, err, 5*time.Second)
 		return
 	}
+}
+
+func (lbc *LoadBalancerController) getIngressByKey(ingKey string) (*extensions.Ingress, error) {
+	obj, ingExists, err := lbc.ingLister.Store.GetByKey(ingKey)
+	if err != nil {
+		return nil, err
+	}
+	if !ingExists {
+		return nil, nil
+	}
+
+	ing := obj.(*extensions.Ingress)
+	return ing, nil
+}
+
+func (lbc *LoadBalancerController) getSecret(namespace, name string) (*api_v1.Secret, error) {
+	secret, err := lbc.client.Core().Secrets(namespace).Get(name, meta_v1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return secret, nil
 }
 
 func (lbc *LoadBalancerController) getIngressEx(ingKey string) (*config.IngressEx, error) {

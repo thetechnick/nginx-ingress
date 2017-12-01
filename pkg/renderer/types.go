@@ -24,6 +24,7 @@ type MainConfigTemplateData struct {
 	WorkerShutdownTimeout string
 }
 
+// MainConfigTemplateDataFromIngressConfig creates a MainConfigTemplateData from config.GlobalConfig
 func MainConfigTemplateDataFromIngressConfig(config *config.GlobalConfig) *MainConfigTemplateData {
 	mainCfg := &MainConfigTemplateData{
 		HTTPSnippets:              config.MainHTTPSnippets,

@@ -1,10 +1,9 @@
-package parser
+package config
 
 import (
 	"fmt"
 	"testing"
 
-	"github.com/thetechnick/nginx-ingress/pkg/config"
 	"github.com/thetechnick/nginx-ingress/pkg/errors"
 
 	"github.com/stretchr/testify/assert"
@@ -28,7 +27,7 @@ func TestConfigMapParser(t *testing.T) {
 
 		assert.Nil(err, "A empty configmap should not produce errors")
 		if assert.NotNil(c) {
-			assert.Equal(config.NewDefaultConfig(), c, "Config should be equal to default config")
+			assert.Equal(NewDefaultConfig(), c, "Config should be equal to default config")
 		}
 	})
 
@@ -52,7 +51,7 @@ func TestConfigMapParser(t *testing.T) {
 		}
 
 		if assert.NotNil(c) {
-			assert.Equal(config.NewDefaultConfig(), c, "Config should be equal to default config")
+			assert.Equal(NewDefaultConfig(), c, "Config should be equal to default config")
 		}
 	})
 
@@ -83,7 +82,7 @@ func TestConfigMapParser(t *testing.T) {
 		}
 
 		if assert.NotNil(c) {
-			assert.Equal(config.NewDefaultConfig(), c, "Config should be equal to default config")
+			assert.Equal(NewDefaultConfig(), c, "Config should be equal to default config")
 		}
 	})
 }
