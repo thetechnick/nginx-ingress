@@ -5,8 +5,8 @@ FROM nginx:1.13.7-alpine
 RUN ln -sf /proc/1/fd/1 /var/log/nginx/access.log \
 	&& ln -sf /proc/1/fd/2 /var/log/nginx/error.log
 
-COPY bin/lbc pkg/controller/ingress.tmpl pkg/controller/nginx.conf.tmpl /
+COPY bin/lbc pkg/renderer/ingress.tmpl pkg/renderer/nginx.conf.tmpl /
 
-RUN rm /etc/nginx/conf.d/* && mkdir /etc/nginx/ssl
+RUN rm /etc/nginx/conf.d/* && mkdir -p /etc/nginx/ssl /etc/nginx/auth
 
 ENTRYPOINT ["/lbc"]

@@ -44,10 +44,11 @@ func NewConfigurator(
 		secretAccessor:    secretAccessor,
 		endpointsAccessor: endpointsAccessor,
 
-		ingParser:          config.NewIngressConfigParser(),
-		tlsSecretParser:    config.NewSecretParser(),
-		configMapParser:    config.NewConfigMapParser(),
-		serverConfigParser: config.NewServerConfigParser(),
+		ingParser:                 config.NewIngressConfigParser(),
+		tlsSecretParser:           config.NewTLSSecretParser(),
+		configMapParser:           config.NewConfigMapParser(),
+		serverConfigParser:        config.NewServerConfigParser(),
+		basicAuthUserSecretParser: config.NewBasicAuthUserSecretParser(),
 
 		ch:           collision.NewMergingCollisionHandler(),
 		configurator: renderer.NewRenderer(),
@@ -69,10 +70,11 @@ type configurator struct {
 	secretAccessor    SecretAccessor
 	endpointsAccessor EndpointsAccessor
 
-	tlsSecretParser    config.SecretParser
-	ingParser          config.IngressConfigParser
-	configMapParser    config.ConfigMapParser
-	serverConfigParser config.ServerConfigParser
+	tlsSecretParser           config.TLSSecretParser
+	ingParser                 config.IngressConfigParser
+	configMapParser           config.ConfigMapParser
+	serverConfigParser        config.ServerConfigParser
+	basicAuthUserSecretParser config.BasicAuthUserSecretParser
 
 	ch           collision.Handler
 	configurator renderer.Renderer
@@ -226,16 +228,45 @@ func (c *configurator) serverConfigForIngressKey(ingressKey string) (
 		return
 	}
 
+	// get basic auth user file
+	var basicAuthUserFile *pb.File
+	if ingressCfg.BasicAuth != "" &&
+		ingressCfg.BasicAuthUserSecret != "" {
+		namespace := ingress.Namespace
+		name := ingressCfg.BasicAuthUserSecret
+		if strings.Contains(ingressCfg.BasicAuthUserSecret, "/") {
+			parts := strings.SplitN(ingressCfg.BasicAuthUserSecret, "/", 2)
+			namespace = parts[0]
+			name = parts[1]
+		}
+
+		var secret *api_v1.Secret
+		secret, err = c.secretAccessor.Get(namespace, name)
+		if err != nil {
+			err = errors.WrapInObjectContext(err, ingress)
+			return
+		}
+
+		basicAuthUserFile, err = c.basicAuthUserSecretParser.Parse(secret)
+		if err != nil {
+			c.recordError("Config Error", err)
+			return
+		}
+	}
+
 	// get secrets
 	tlsSecrets := map[string]*pb.File{}
 	for _, tls := range ingress.Spec.TLS {
 		var secret *api_v1.Secret
 		if secret, err = c.secretAccessor.Get(ingress.Namespace, tls.SecretName); err != nil {
+			err = errors.WrapInObjectContext(err, ingress)
 			return
 		}
 
 		var tlsCert []byte
 		if tlsCert, err = c.tlsSecretParser.Parse(secret); err != nil {
+			c.recordError("Config Error", err)
+			err = errors.WrapInObjectContext(err, ingress)
 			return
 		}
 
@@ -294,6 +325,19 @@ func (c *configurator) serverConfigForIngressKey(ingressKey string) (
 	if scWarning != nil {
 		c.recordError("Config Warning", scWarning)
 	}
+	if basicAuthUserFile != nil {
+		for _, server := range servers {
+			updatedLocations := []config.Location{}
+			for _, location := range server.Locations {
+				location.BasicAuth = ingressCfg.BasicAuth
+				location.BasicAuthUserFile = basicAuthUserFile.Name
+				updatedLocations = append(updatedLocations, location)
+			}
+			server.Locations = updatedLocations
+			server.Files = append(server.Files, basicAuthUserFile)
+		}
+	}
+
 	return
 }
 

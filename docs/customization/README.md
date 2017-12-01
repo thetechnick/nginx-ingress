@@ -6,6 +6,8 @@ The table below summarizes some of the options. More options (extensions) are av
 
 | Annotation | ConfigMaps Key | Description | Default |
 | ---------- | -------------- | ----------- | ------- |
+| `nginx.org/auth-basic` | N/A | Sets the value of the [auth_basic](http://nginx.org/en/docs/http/ngx_http_auth_basic_module.html) directive on all locations of the ingress. | `off` |
+| `nginx.org/auth-basic-user-secret` | N/A | Sets the value of the `auth_basic_user_file` directive using the value of the key `users` of the secret. | N/A |
 | `nginx.org/proxy-connect-timeout` | `proxy-connect-timeout` | Sets the value of the [proxy_connect_timeout](http://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_connect_timeout) directive. | `60s` |
 | `nginx.org/proxy-read-timeout` | `proxy-read-timeout` | Sets the value of the [proxy_read_timeout](http://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_read_timeout) directive. | `60s` |
 | `nginx.org/client-max-body-size` | `client-max-body-size` | Sets the value of the [client_max_body_size](http://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size) directive. | `1m` |

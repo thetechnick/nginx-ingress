@@ -49,6 +49,12 @@ func TestRenderer(t *testing.T) {
 				SSL:               true,
 				SSLCertificate:    "cert.pem",
 				SSLCertificateKey: "key.pem",
+				Locations: []config.Location{
+					config.Location{
+						BasicAuth:         "test",
+						BasicAuthUserFile: "test.auth",
+					},
+				},
 			},
 		}
 		sc, err := c.RenderServerConfig(mc)
@@ -65,6 +71,8 @@ func TestRenderer(t *testing.T) {
 			assert.Regexp("ssl_certificate cert.pem;", config)
 			assert.Regexp("ssl_certificate_key key.pem;", config)
 			assert.Regexp("server_name one.example.com;", config)
+			assert.Regexp("auth_basic test;", config)
+			assert.Regexp("auth_basic_user_file test.auth;", config)
 		}
 	})
 }

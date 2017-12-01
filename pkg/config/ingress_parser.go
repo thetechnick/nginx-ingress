@@ -77,6 +77,14 @@ func (p *ingParser) Parse(ing *extensions.Ingress) (ingCfg *IngressConfig, warni
 			ingCfg.ProxyBuffering = &proxyBuffering
 		}
 	}
+	if basicAuth, exists := ing.Annotations["nginx.org/auth-basic"]; exists {
+		if basicAuthUserSecret, exists := ing.Annotations["nginx.org/auth-basic-user-secret"]; exists {
+			ingCfg.BasicAuth = basicAuth
+			ingCfg.BasicAuthUserSecret = basicAuthUserSecret
+		} else {
+			warnings = append(warnings, &IngressAnnotationError{"nginx.org/auth-basic", fmt.Errorf("only valid with 'nginx.org/auth-basic-user-secret' annotation")})
+		}
+	}
 
 	if hsts, exists, err := util.GetMapKeyAsBool(ing.Annotations, "nginx.org/hsts"); exists {
 		if err != nil {
@@ -165,6 +173,8 @@ type IngressConfig struct {
 	RealIPHeader    *string
 	SetRealIPFrom   []string
 	RealIPRecursive *bool
+
+	BasicAuth, BasicAuthUserSecret string
 
 	WebsocketServices map[string]bool
 	Rewrites          map[string]string

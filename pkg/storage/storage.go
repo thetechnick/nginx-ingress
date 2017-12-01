@@ -9,6 +9,8 @@ const (
 	ServerConfigDir = "/etc/nginx/conf.d/"
 	// CertificatesDir contains the tls/ssl certificates and the dhparam file
 	CertificatesDir = "/etc/nginx/ssl/"
+	// AuthDir contains basic auth files
+	AuthDir = "/etc/nginx/auth/"
 	// DHParamFile path to the DHParamsFile
 	DHParamFile = "/etc/nginx/ssl/dhparam.pem"
 )

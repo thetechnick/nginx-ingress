@@ -96,6 +96,7 @@ func (m *mergingCollisionHandler) mergeServers(base config.Server, merge *config
 	}
 
 	if merge.SSL {
+		// always enable SSL if there is at least on server configured for it
 		base.SSL = true
 		base.SSLCertificate = merge.SSLCertificate
 		base.SSLCertificateKey = merge.SSLCertificateKey

@@ -83,9 +83,11 @@ func CreateServerConfig(gCfg *GlobalConfig, ingCfg *IngressConfig) *Server {
 
 // Location describes an NGINX location
 type Location struct {
+	Path     string
+	Upstream Upstream
+
+	// Annotations/Config
 	LocationSnippets     []string
-	Path                 string
-	Upstream             Upstream
 	ProxyConnectTimeout  string
 	ProxyReadTimeout     string
 	ClientMaxBodySize    string
@@ -96,6 +98,9 @@ type Location struct {
 	ProxyBuffers         string
 	ProxyBufferSize      string
 	ProxyMaxTempFileSize string
+
+	// http://nginx.org/en/docs/http/ngx_http_auth_basic_module.html
+	BasicAuth, BasicAuthUserFile string
 }
 
 // IngressEx holds an Ingress along with Endpoints of the services

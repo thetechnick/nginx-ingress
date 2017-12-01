@@ -52,6 +52,11 @@ server {
 		proxy_set_header Connection $connection_upgrade;
 		{{end}}
 
+		{{- if $location.BasicAuth}}
+		auth_basic {{$location.BasicAuth}};
+		auth_basic_user_file {{$location.BasicAuthUserFile}};
+		{{- end}}
+
 		{{- if $location.LocationSnippets}}
 		{{range $value := $location.LocationSnippets}}
 		{{$value}}{{end}}

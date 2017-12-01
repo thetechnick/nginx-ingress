@@ -8,8 +8,8 @@ import (
 	api_v1 "k8s.io/client-go/pkg/api/v1"
 )
 
-func TestSecretParser(t *testing.T) {
-	p := NewSecretParser()
+func TestTLSSecretParser(t *testing.T) {
+	p := NewTLSSecretParser()
 
 	t.Run("should return all errors", func(t *testing.T) {
 		assert := assert.New(t)
