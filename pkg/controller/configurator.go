@@ -1,12 +1,14 @@
 package controller
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/thetechnick/nginx-ingress/pkg/collision"
 	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/errors"
 	"github.com/thetechnick/nginx-ingress/pkg/parser"
 	"github.com/thetechnick/nginx-ingress/pkg/storage"
 	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
@@ -61,11 +63,8 @@ func (c *configurator) ConfigUpdated(cfgm *api_v1.ConfigMap) error {
 
 	nginxConfig, err := c.configMapParser.Parse(cfgm)
 	if err != nil {
-		if verr, ok := err.(*parser.ValidationError); ok {
-			for _, e := range verr.Errors {
-				c.recorder.Event(cfgm, api_v1.EventTypeWarning, "Config Error", e.Error())
-			}
-		} else {
+		c.recordError("Config Error", err)
+		if nginxConfig == nil {
 			return err
 		}
 	}
@@ -99,9 +98,8 @@ func (c *configurator) parseServerConfig(ingEx *config.IngressEx) ([]*config.Ser
 	}
 	servers, err := c.ingExParser.Parse(*c.mainConfig, ingEx)
 	if err != nil {
-		if verr, ok := err.(*parser.IngressExValidationError); ok {
-			c.handleIngressExValidationError(verr)
-		} else {
+		c.recordError("Config Error", err)
+		if servers == nil {
 			return nil, err
 		}
 	}
@@ -170,6 +168,33 @@ func dependencyMapLogEntry(dependencies map[string]map[string]*pb.ServerConfig) 
 	return
 }
 
+func (c *configurator) recordError(reason string, err error) {
+	if err == nil {
+		return
+	}
+
+	cerr, ok := err.(errors.ErrObjectContext)
+	if !ok {
+		c.log.
+			WithError(err).
+			Error("Could not record error event due to missing context")
+		return
+	}
+
+	if werr, ok := cerr.WrappedError().(parser.ValidationError); !ok {
+		for _, e := range werr {
+			c.recorder.Event(cerr.Object(), api_v1.EventTypeWarning, reason, e.Error())
+		}
+	}
+
+	c.recorder.Event(
+		cerr.Object(),
+		api_v1.EventTypeWarning,
+		reason,
+		cerr.Error(),
+	)
+}
+
 func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -190,6 +215,7 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 	// First Ingress/Updated Ingress
 	updatedIngEx, err := c.ingExStore.GetIngressEx(updatedIngressKey)
 	if err != nil {
+		c.recordError("Config Error", err)
 		return
 	}
 	if updatedIngEx != nil {
@@ -200,6 +226,7 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 		var updatedServers []*config.Server
 		updatedServers, err = c.parseServerConfig(updatedIngEx)
 		if err != nil {
+			c.recordError("Error parsing server config", err)
 			return err
 		}
 		for _, server := range updatedServers {
@@ -222,6 +249,7 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 
 	dependencyMap, err := c.dependencyMap(updatedIngressKey, updatedServerNames, nil)
 	if err != nil {
+		c.recordError("Error mapping dependencies", err)
 		return
 	}
 
@@ -242,6 +270,7 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 
 			servers, perr := c.parseServerConfig(ingEx)
 			if perr != nil {
+				c.recordError(fmt.Sprintf("Error parsing dependency of \"%s\"", ingressKey), perr)
 				return perr
 			}
 			for _, server := range servers {
@@ -311,20 +340,6 @@ func (c *configurator) IngressUpdated(updatedIngressKey string) (err error) {
 	}
 
 	return nil
-}
-
-func (c *configurator) handleIngressExValidationError(err *parser.IngressExValidationError) {
-	if err.IngressError != nil {
-		for _, e := range err.IngressError.Errors {
-			c.recorder.Event(err.IngressError.Object, api_v1.EventTypeWarning, "Config Error", e.Error())
-		}
-	}
-
-	for _, s := range err.SecretErrors {
-		for _, e := range err.IngressError.Errors {
-			c.recorder.Event(s.Object, api_v1.EventTypeWarning, "Config Error", e.Error())
-		}
-	}
 }
 
 func (c *configurator) getExistingServerConfigsAsMap() (map[string]*pb.ServerConfig, error) {

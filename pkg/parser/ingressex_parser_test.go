@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/errors"
 	"github.com/thetechnick/nginx-ingress/pkg/storage"
 	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -96,13 +97,12 @@ func TestIngressExParser(t *testing.T) {
 		}
 		mainConfig := config.Config{}
 		tlsCerts := map[string]*pb.TLSCertificate{}
-		validationError := &ValidationError{&ingress1, []error{}}
-		ingressParserMock.On("Parse", mainConfig, ingEx, tlsCerts).Return([]*config.Server{}, validationError)
+		ingressParseError := errors.WrapInObjectContext(ValidationError([]error{}), ingEx.Ingress)
+		ingressParserMock.On("Parse", mainConfig, ingEx, tlsCerts).Return([]*config.Server{}, ingressParseError)
 
 		_, err := p.Parse(mainConfig, ingEx)
 		if assert.Error(err) {
-			assert.IsType(&IngressExValidationError{}, err)
-			assert.Equal(validationError, err.(*IngressExValidationError).IngressError)
+			assert.Equal(ingressParseError, err)
 		}
 	})
 }

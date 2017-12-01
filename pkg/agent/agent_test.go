@@ -35,7 +35,7 @@ func TestAgent(t *testing.T) {
 		DialTimeout: 5 * time.Second,
 	})
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	defer testCLI.Close()
 

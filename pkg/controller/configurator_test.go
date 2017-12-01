@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/thetechnick/nginx-ingress/pkg/collision"
 	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/errors"
 	"github.com/thetechnick/nginx-ingress/pkg/parser"
 	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 	"github.com/thetechnick/nginx-ingress/pkg/test"
@@ -220,6 +221,7 @@ func TestConfigurator(t *testing.T) {
 		serverConfigStorage.On("Delete", sc2).Return(nil)
 		renderer.On("RenderServerConfig", &mergedList[0]).Return(rendered, nil)
 		serverConfigStorage.On("Put", rendered).Return(nil)
+		renderer.On("RenderMainConfig", mock.Anything).Return(nil, nil)
 
 		err := c.IngressUpdated("default/ing1")
 		assert.NoError(err)
@@ -252,12 +254,10 @@ func TestConfigurator(t *testing.T) {
 
 		nc := config.NewDefaultConfig()
 		mc := &pb.MainConfig{}
-		e := errors.New("test error")
-		configMapParser.On("Parse", &cfgm).Return(nc, &parser.ValidationError{
-			Errors: []error{e},
-		})
-		recorder.On("Event", &cfgm, api_v1.EventTypeWarning, "Config Error", e.Error())
-		renderer.On("RenderMainConfig", nc).Return(mc, nil)
+		e := fmt.Errorf("test error")
+		configMapParser.On("Parse", &cfgm).Return(nc, errors.WrapInObjectContext(parser.ValidationError([]error{e}), &cfgm))
+		recorder.On("Event", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		renderer.On("RenderMainConfig", mock.Anything).Return(mc, nil)
 		mainConfigStorage.On("Put", mc).Return(nil)
 
 		err := c.ConfigUpdated(&cfgm)
@@ -265,19 +265,6 @@ func TestConfigurator(t *testing.T) {
 		configMapParser.AssertCalled(t, "Parse", &cfgm)
 		renderer.AssertCalled(t, "RenderMainConfig", nc)
 		mainConfigStorage.AssertCalled(t, "Put", mc)
-		recorder.AssertCalled(t, "Event", &cfgm, api_v1.EventTypeWarning, "Config Error", e.Error())
-	})
-
-	t.Run("ConfigUpdated should return other parser errors", func(t *testing.T) {
-		beforeEach()
-		assert := assert.New(t)
-
-		nc := config.NewDefaultConfig()
-		e := errors.New("test error")
-		configMapParser.On("Parse", &cfgm).Return(nc, e)
-
-		err := c.ConfigUpdated(&cfgm)
-		assert.Error(err, "test error")
-		configMapParser.AssertCalled(t, "Parse", &cfgm)
+		recorder.AssertCalled(t, "Event", &cfgm, api_v1.EventTypeWarning, "Config Error", mock.Anything)
 	})
 }

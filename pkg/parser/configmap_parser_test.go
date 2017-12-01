@@ -1,10 +1,11 @@
 package parser
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/errors"
 
 	"github.com/stretchr/testify/assert"
 
@@ -14,7 +15,7 @@ import (
 func TestConfigMapKeyError(t *testing.T) {
 	assert := assert.New(t)
 
-	e := &ConfigMapKeyError{"test", errors.New("error")}
+	e := &ConfigMapKeyError{"test", fmt.Errorf("error")}
 	assert.Equal("Skipping key \"test\": error", e.Error())
 }
 
@@ -42,10 +43,12 @@ func TestConfigMapParser(t *testing.T) {
 			},
 		})
 
-		if assert.NotNil(err) {
-			assert.IsType(&ValidationError{}, err)
-			verr := err.(*ValidationError)
-			assert.Len(verr.Errors, 2)
+		if assert.NotNil(err) && assert.Implements((*errors.ErrObjectContext)(nil), err) {
+			cerr := err.(errors.ErrObjectContext)
+			if assert.IsType(ValidationError{}, cerr.WrappedError()) {
+				verr := cerr.WrappedError().(ValidationError)
+				assert.Len(verr, 2)
+			}
 		}
 
 		if assert.NotNil(c) {
@@ -71,10 +74,12 @@ func TestConfigMapParser(t *testing.T) {
 			},
 		})
 
-		if assert.NotNil(err) {
-			assert.IsType(&ValidationError{}, err)
-			verr := err.(*ValidationError)
-			assert.Len(verr.Errors, 11)
+		if assert.NotNil(err) && assert.Implements((*errors.ErrObjectContext)(nil), err) {
+			cerr := err.(errors.ErrObjectContext)
+			if assert.IsType(ValidationError{}, cerr.WrappedError()) {
+				verr := cerr.WrappedError().(ValidationError)
+				assert.Len(verr, 11)
+			}
 		}
 
 		if assert.NotNil(c) {

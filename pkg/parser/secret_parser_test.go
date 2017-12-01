@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/thetechnick/nginx-ingress/pkg/errors"
 	api_v1 "k8s.io/client-go/pkg/api/v1"
 )
 
@@ -15,11 +16,10 @@ func TestSecretParser(t *testing.T) {
 
 		c, err := p.Parse(&api_v1.Secret{})
 
-		if assert.NotNil(err) {
-			assert.IsType(&ValidationError{}, err)
-			verr := err.(*ValidationError)
-
-			assert.Len(verr.Errors, 2)
+		if assert.NotNil(err) && assert.Implements((*errors.ErrObjectContext)(nil), err) {
+			cerr := err.(errors.ErrObjectContext)
+			verr := cerr.WrappedError().(ValidationError)
+			assert.Len(verr, 2)
 		}
 		assert.Nil(c)
 	})

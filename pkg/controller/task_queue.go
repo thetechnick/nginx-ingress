@@ -27,16 +27,22 @@ type taskQueue struct {
 	sync func(string)
 	// workerDone is closed when the worker exits
 	workerDone chan struct{}
+	log        *log.Entry
 }
 
 // NewTaskQueue creates a new task queue with the given sync function.
 // The sync function is called for every element inserted into the queue.
-func NewTaskQueue(syncFn func(string)) TaskQueue {
-	return &taskQueue{
+func NewTaskQueue(syncFn func(string), log *log.Entry) TaskQueue {
+	tq := &taskQueue{
 		queue:      workqueue.New(),
 		sync:       syncFn,
 		workerDone: make(chan struct{}),
+		log:        log,
 	}
+	if tq.log == nil {
+		tq.log = log.WithField("module", "Generic TaskQueue")
+	}
+	return tq
 }
 
 func (t *taskQueue) Run(period time.Duration, stopCh <-chan struct{}) {

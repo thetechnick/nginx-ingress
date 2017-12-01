@@ -1,11 +1,11 @@
 package parser
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/errors"
 	"github.com/thetechnick/nginx-ingress/pkg/util"
 	api_v1 "k8s.io/client-go/pkg/api/v1"
 )
@@ -142,7 +142,7 @@ func (p *configMapParser) Parse(cfgm *api_v1.ConfigMap) (*config.Config, error) 
 		}
 
 		if parsingErrors {
-			errs = append(errs, errors.New("Error validating HSTS settings in ConfigMap, skipping keys for all hsts settings"))
+			errs = append(errs, fmt.Errorf("Error validating HSTS settings in ConfigMap, skipping keys for all hsts settings"))
 		} else {
 			cfg.HSTS = hsts
 			if existsMA {
@@ -187,7 +187,7 @@ func (p *configMapParser) Parse(cfgm *api_v1.ConfigMap) (*config.Config, error) 
 	}
 
 	if len(errs) > 0 {
-		return cfg, &ValidationError{cfgm, errs}
+		return cfg, errors.WrapInObjectContext(ValidationError(errs), cfgm)
 	}
 
 	return cfg, nil

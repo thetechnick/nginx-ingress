@@ -2,8 +2,9 @@ package parser
 
 import (
 	"bytes"
-	"errors"
+	"fmt"
 
+	"github.com/thetechnick/nginx-ingress/pkg/errors"
 	api_v1 "k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/record"
 )
@@ -26,15 +27,15 @@ func (p *secretParser) Parse(secret *api_v1.Secret) ([]byte, error) {
 	errs := []error{}
 	cert, ok := secret.Data[api_v1.TLSCertKey]
 	if !ok {
-		errs = append(errs, errors.New("missing certificate"))
+		errs = append(errs, fmt.Errorf("missing certificate"))
 	}
 	key, ok := secret.Data[api_v1.TLSPrivateKeyKey]
 	if !ok {
-		errs = append(errs, errors.New("missing private key"))
+		errs = append(errs, fmt.Errorf("missing private key"))
 	}
 
 	if len(errs) > 0 {
-		return nil, &ValidationError{secret, errs}
+		return nil, errors.WrapInObjectContext(ValidationError(errs), secret)
 	}
 	return bytes.Join([][]byte{cert, key}, []byte("\n")), nil
 }

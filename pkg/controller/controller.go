@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/errors"
 	"github.com/thetechnick/nginx-ingress/pkg/storage"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -93,7 +94,7 @@ func NewLoadBalancerController(
 		scs,
 	)
 
-	lbc.ingQueue = NewTaskQueue(lbc.syncIng)
+	lbc.ingQueue = NewTaskQueue(lbc.syncIng, log.WithField("module", "IngressTaskQueue"))
 
 	ingHandlers := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -258,7 +259,7 @@ func NewLoadBalancerController(
 			log.WithError(err).Error("Invalid config-maps setting")
 		} else {
 			lbc.watchNginxConfigMaps = true
-			lbc.cfgmQueue = NewTaskQueue(lbc.syncCfgm)
+			lbc.cfgmQueue = NewTaskQueue(lbc.syncCfgm, log.WithField("module", "ConfigMapTaskQueue"))
 
 			cfgmHandlers := cache.ResourceEventHandlerFuncs{
 				AddFunc: func(obj interface{}) {
@@ -406,9 +407,9 @@ func (lbc *LoadBalancerController) getIngressEx(ingKey string) (*config.IngressE
 	}
 
 	ing := obj.(*extensions.Ingress)
-	ingEx, err := lbc.createIngress(ing)
+	ingEx, err := lbc.createIngressEx(ing)
 	if err != nil {
-		return nil, err
+		return nil, errors.WrapInObjectContext(err, ing)
 	}
 
 	log.
@@ -472,7 +473,7 @@ func (lbc *LoadBalancerController) getIngressForEndpoints(obj interface{}) []ext
 	return ings
 }
 
-func (lbc *LoadBalancerController) createIngress(ing *extensions.Ingress) (*config.IngressEx, error) {
+func (lbc *LoadBalancerController) createIngressEx(ing *extensions.Ingress) (*config.IngressEx, error) {
 	ingEx := &config.IngressEx{
 		Ingress: ing,
 	}
@@ -482,7 +483,7 @@ func (lbc *LoadBalancerController) createIngress(ing *extensions.Ingress) (*conf
 		secretName := tls.SecretName
 		secret, err := lbc.client.Core().Secrets(ing.Namespace).Get(secretName, meta_v1.GetOptions{})
 		if err != nil {
-			return nil, fmt.Errorf("Error retrieving secret %v for Ingress %v: %v", secretName, ing.Name, err)
+			return nil, err
 		}
 		secrets[secretName] = secret
 	}
@@ -521,18 +522,6 @@ func (lbc *LoadBalancerController) createIngress(ing *extensions.Ingress) (*conf
 	}
 
 	ingEx.Secrets = secrets
-
-	// certificates := map[string]*config.CertificatePair{}
-	// for host, secret := range secrets {
-	// 	s, errs := lbc.secretParser.Parse(secret)
-	// 	for _, err := range errs {
-	// 		lbc.recorder.Event(secret, api_v1.EventTypeWarning, "Config Error", err.Error())
-	// 	}
-	// 	if len(errs) == 0 {
-	// 		certificates[host] = s
-	// 	}
-	// }
-
 	return ingEx, nil
 }
 

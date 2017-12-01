@@ -1,12 +1,12 @@
 package parser
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/thetechnick/nginx-ingress/pkg/config"
+	"github.com/thetechnick/nginx-ingress/pkg/errors"
 	"github.com/thetechnick/nginx-ingress/pkg/storage/pb"
 	"github.com/thetechnick/nginx-ingress/pkg/util"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
@@ -109,7 +109,7 @@ func (p *ingressParser) Parse(ingCfg config.Config, ingEx *config.IngressEx, pem
 			}
 
 			if parsingErrors {
-				errs = append(errs, errors.New("Error parsing hsts ingress annotations, skipping all hsts annotations"))
+				errs = append(errs, fmt.Errorf("Error parsing hsts ingress annotations, skipping all hsts annotations"))
 			} else {
 				ingCfg.HSTS = hsts
 				if existsMA {
@@ -248,7 +248,7 @@ func (p *ingressParser) Parse(ingCfg config.Config, ingEx *config.IngressEx, pem
 	}
 
 	if len(errs) > 0 {
-		return servers, &ValidationError{ing, errs}
+		return servers, errors.WrapInObjectContext(ValidationError(errs), ing)
 	}
 	return servers, nil
 }

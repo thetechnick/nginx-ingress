@@ -2,19 +2,19 @@ package parser
 
 import (
 	"fmt"
-
-	"k8s.io/apimachinery/pkg/runtime"
+	"strings"
 )
 
-// ValidationError contains individual errors during validation
-type ValidationError struct {
-	Object runtime.Object
-	Errors []error
-}
+// ValidationError packs multiple validation errors into a single error
+type ValidationError []error
 
-func (e *ValidationError) Error() string {
+func (e ValidationError) Error() string {
 	if e == nil {
 		return fmt.Sprintf("nil error!")
 	}
-	return fmt.Sprintf("error validating: %v", e.Errors)
+	errString := []string{}
+	for _, err := range e {
+		errString = append(errString, err.Error())
+	}
+	return fmt.Sprintf("validation: [ %s ]", strings.Join(errString, ", "))
 }

@@ -11,8 +11,8 @@ import (
 
 // IngressExValidationError contains Secret and Ingress validation errors
 type IngressExValidationError struct {
-	SecretErrors []*ValidationError
-	IngressError *ValidationError
+	SecretErrors []error
+	IngressError error
 }
 
 func (e *IngressExValidationError) Error() string {
@@ -39,7 +39,6 @@ type ingressExParser struct {
 
 func (p *ingressExParser) Parse(mainConfig config.Config, ingEx *config.IngressEx) ([]*config.Server, error) {
 	// TLS
-	secretErrors := []*ValidationError{}
 	tlsCerts := map[string]*pb.TLSCertificate{}
 	for _, tls := range ingEx.Ingress.Spec.TLS {
 		secretName := tls.SecretName
@@ -50,12 +49,7 @@ func (p *ingressExParser) Parse(mainConfig config.Config, ingEx *config.IngressE
 
 		tlsCert, err := p.secretParser.Parse(secret)
 		if err != nil {
-			if err, ok := err.(*ValidationError); ok {
-				// just gather validation errors
-				secretErrors = append(secretErrors, err)
-			} else {
-				return nil, err
-			}
+			return nil, err
 		}
 		if tlsCert == nil {
 			continue
@@ -78,17 +72,5 @@ func (p *ingressExParser) Parse(mainConfig config.Config, ingEx *config.IngressE
 	}
 
 	// Server
-	generatedServers, err := p.ingressParser.Parse(mainConfig, ingEx, tlsCerts)
-	if err != nil {
-		if verr, ok := err.(*ValidationError); ok {
-			// just gather validation errors
-			return generatedServers, &IngressExValidationError{secretErrors, verr}
-		}
-		return nil, err
-	}
-
-	if len(secretErrors) > 0 {
-		return generatedServers, &IngressExValidationError{secretErrors, nil}
-	}
-	return generatedServers, nil
+	return p.ingressParser.Parse(mainConfig, ingEx, tlsCerts)
 }
