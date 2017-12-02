@@ -21,7 +21,7 @@ spec:
         - -nginx-configmaps=kube-system/ingress-lbc
         - -server-mode
         - -etcd-endpoints=example-etcd-cluster-client:2379
-        image: quay.io/nico_schieder/ingress-lbc:0.7.1
+        image: quay.io/nico_schieder/ingress-lbc:0.12.0
         imagePullPolicy: Always
         name: lbc
 ---
@@ -49,7 +49,7 @@ spec:
       containers:
       - args:
         - -etcd-endpoints=example-etcd-cluster-client:2379
-        image: quay.io/nico_schieder/ingress-agent:0.5.0-dirty
+        image: quay.io/nico_schieder/ingress-agent:0.12.0
         imagePullPolicy: Always
         name: agent
         ports:
