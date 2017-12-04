@@ -226,6 +226,9 @@ func (c *configurator) serverConfigForIngressKey(ingressKey string) (
 		}
 		return
 	}
+	if ingress == nil {
+		return
+	}
 
 	ingressCfg, warning, cfgErr := c.ingParser.Parse(ingress)
 	if warning != nil {
