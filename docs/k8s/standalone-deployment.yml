@@ -22,7 +22,7 @@ spec:
       containers:
       - args:
         - -nginx-configmaps=kube-system/ingress-lbc
-        image: quay.io/nico_schieder/ingress-lbc:0.12.0
+        image: quay.io/nico_schieder/ingress-lbc:0.12.1
         imagePullPolicy: Always
         name: lbc
         ports:
