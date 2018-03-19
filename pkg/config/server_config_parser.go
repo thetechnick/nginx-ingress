@@ -67,8 +67,12 @@ func (p *serverConfigParser) Parse(
 				upstreams[upsName] = upstream
 			}
 
+			locPath := pathOrDefault(path.Path)
+			if ingCfg.LocationModifier != nil {
+				locPath = fmt.Sprintf("%s %s", *ingCfg.LocationModifier, locPath)
+			}
 			loc := CreateLocation(
-				pathOrDefault(path.Path),
+				locPath,
 				upstreams[upsName],
 				&gCfg,
 				&ingCfg,

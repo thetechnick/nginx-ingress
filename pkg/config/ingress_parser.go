@@ -126,6 +126,16 @@ func (p *ingParser) Parse(ing *extensions.Ingress) (ingCfg *IngressConfig, warni
 	if proxyMaxTempFileSize, exists := ing.Annotations["nginx.org/proxy-max-temp-file-size"]; exists {
 		ingCfg.ProxyMaxTempFileSize = &proxyMaxTempFileSize
 	}
+	if locationModifier, exists := ing.Annotations["nginx.org/location-modifier"]; exists {
+		if locationModifier != "=" &&
+			locationModifier != "~" &&
+			locationModifier != "~*" &&
+			locationModifier != "^~" {
+			warnings = append(warnings, &IngressAnnotationError{"nginx.org/location-modifier", fmt.Errorf("'%s' is no valid location modifier", locationModifier)})
+		} else {
+			ingCfg.LocationModifier = &locationModifier
+		}
+	}
 
 	ingCfg.WebsocketServices = getWebsocketServices(ing)
 	ingCfg.SSLServices = getSSLServices(ing)
@@ -154,6 +164,7 @@ type IngressConfig struct {
 	ClientMaxBodySize *string
 	HTTP2             *bool
 	RedirectToHTTPS   *bool
+	LocationModifier  *string
 
 	ProxyBuffering *bool
 	ProxyConnectTimeout,
